@@ -1,0 +1,20 @@
+{
+  "name": "Gym Logger — Oskar MVP",
+  "short_name": "GymLogger",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/google/material-design-icons/master/png/hardware/fitness_center/materialicons/192dp/2x/baseline_fitness_center_black_24dp.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://raw.githubusercontent.com/google/material-design-icons/master/png/hardware/fitness_center/materialicons/512dp/2x/baseline_fitness_center_black_24dp.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
