@@ -3,281 +3,290 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Gym Logger — Oskar MVP</title>
+  <title>Gym Logger — Pass</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#111827" />
   <style>
-    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --acc:#22c55e; --red:#ef4444; }
-    *{box-sizing:border-box;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Inter,Roboto}
-    body{margin:0;background:linear-gradient(180deg,#0b1220,#0f172a);color:var(--text)}
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --ok:#22c55e; --warn:#ef4444; }
+    *{box-sizing:border-box;font-family:ui-sans-serif,system-ui,-apple-system,Inter,Roboto}
+    body{margin:0;background:#0b1220;color:var(--text)}
     .wrap{max-width:860px;margin:0 auto;padding:16px}
-    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin:8px 0 16px}
-    h1{font-size:22px;margin:0}
-    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    .card{background:#0d1322;border:1px solid #1f2937;border-radius:16px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
     .row{display:flex;gap:10px;flex-wrap:wrap}
     .col{flex:1 1 260px}
     label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
-    input,select,textarea,button{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #243244;background:#0b1220;color:var(--text)}
+    select,input,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #243244;background:#000;color:var(--text);font-weight:700}
     input::placeholder{color:#64748b}
-    button{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;font-weight:700;cursor:pointer}
-    button.ghost{background:transparent;border:1px solid #334155}
-    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#0b1220;border:1px solid #253043;color:#cbd5e1;font-size:12px}
-    .list{display:grid;gap:10px}
-    .setrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center}
-    .muted{color:#94a3b8}
+    .btn{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid #334155;font-weight:600}
+    .btn.save{background:linear-gradient(180deg,#22c55e,#16a34a);font-size:18px}
+    .title{font-size:22px;font-weight:800;margin:0 0 10px}
+    .muted{color:var(--muted);font-size:12px}
+    .sp{height:10px}
+    table{width:100%;border-collapse:collapse;background:#0b1220;border-radius:12px;overflow:hidden}
+    th,td{padding:14px;border-bottom:1px solid #1f2937;text-align:left}
+    th{background:#0f172a;font-weight:800}
+    tr:last-child td{border-bottom:none}
+    .ok{color:var(--ok);font-weight:800}
+    .warn{color:var(--warn);font-weight:800}
+    .pill{display:inline-block;padding:6px 10px;border:1px solid #253043;border-radius:999px;color:#cbd5e1;background:#0b1220;font-size:12px}
+    .footer{display:flex;gap:10px;flex-wrap:wrap}
     .grid{display:grid;grid-template-columns:1fr;gap:12px}
     @media(min-width:720px){.grid{grid-template-columns:1.2fr .8fr}}
-    .sp{height:8px}
-    .small{font-size:12px}
-    .hl{color:#86efac}
-    .divider{height:1px;background:#1f2937;margin:8px 0}
   </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Gym Logger</h1>
-    <div class="pill">MVP • Offline • PWA</div>
-  </header>
-
   <div class="grid">
+    <!-- VÄNSTER: AKTIVT PASS -->
     <section class="card">
+      <h1 class="title">Aktivt pass</h1>
+
+      <!-- Övning + datum -->
       <div class="row">
         <div class="col">
           <label>Övning</label>
-          <input id="exercise" list="exerciseList" placeholder="t.ex. Marklyft" />
-          <datalist id="exerciseList"></datalist>
-          <div class="small muted" id="lastMeta"></div>
+          <select id="exercise">
+            <option>Marklyft</option>
+            <option>Bänkpress</option>
+            <option>Knäböj</option>
+            <option>Militärpress</option>
+            <option>Chins</option>
+            <option>Rodd</option>
+          </select>
         </div>
         <div class="col">
           <label>Datum</label>
-          <input type="date" id="date" />
+          <input type="date" id="date">
         </div>
       </div>
+
       <div class="sp"></div>
-      <div id="sets" class="list"></div>
-      <button id="addSet">+ Lägg till set</button>
+
+      <!-- Svarta rutor för vikt/reps + Addera -->
+      <div class="row">
+        <div class="col">
+          <label>Vikt (kg)</label>
+          <input id="weight" inputmode="decimal" placeholder="t.ex. 140">
+        </div>
+        <div class="col">
+          <label>Reps</label>
+          <input id="reps" inputmode="numeric" placeholder="t.ex. 5">
+        </div>
+        <div class="col" style="align-self:end">
+          <button id="add" class="btn">Addera</button>
+        </div>
+      </div>
+
       <div class="sp"></div>
-      <label>Anteckningar (valfritt)</label>
-      <textarea id="notes" rows="2" placeholder="Känsla, teknik, sömn, osv…"></textarea>
+
+      <!-- Tabell: Pågående set + Förslagsrad -->
+      <table>
+        <thead>
+          <tr>
+            <th>Vikt</th>
+            <th>Reps</th>
+            <th>Färdigt?</th>
+          </tr>
+        </thead>
+        <tbody id="currentTbody">
+          <!-- dynamiska rader här -->
+        </tbody>
+        <tbody>
+          <tr id="suggestRow">
+            <td class="warn" id="sugWeight">–</td>
+            <td class="warn" id="sugReps">–</td>
+            <td class="warn">Förslag</td>
+          </tr>
+        </tbody>
+      </table>
+
       <div class="sp"></div>
       <div class="row">
-        <div class="col"><button id="save">Spara pass</button></div>
-        <div class="col"><button class="ghost" id="copyLI">Copy LinkedIn Post</button></div>
+        <div class="col pill">Senaste max: <span id="lastMax">—</span></div>
+        <div class="col pill">Senaste datum: <span id="lastDate">—</span></div>
       </div>
+
       <div class="sp"></div>
-      <div class="small muted" id="advice">Rekommendation kommer här…</div>
+      <button id="save" class="btn save">Spara</button>
     </section>
 
+    <!-- HÖGER: KORT HISTORIK & EXPORT -->
     <section class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-        <div>
-          <div class="muted small">Senaste för vald övning</div>
-          <div id="lastSummary" style="font-weight:700"></div>
-          <div class="small">Beräknat 1RM: <span id="last1rm" class="hl">–</span></div>
-        </div>
-        <div>
-          <button class="ghost" id="exportJSON">Export JSON</button>
-          <button class="ghost" id="exportCSV">Export CSV</button>
-        </div>
+      <h2 class="title">Historik</h2>
+      <div class="muted">Senaste 10 för vald övning:</div>
+      <div id="history" style="margin-top:8px;display:grid;gap:8px"></div>
+      <div class="sp"></div>
+      <div class="footer">
+        <button class="btn ghost" id="exportJSON">Export JSON</button>
+        <button class="btn ghost" id="exportCSV">Export CSV</button>
       </div>
-      <div class="divider"></div>
-      <div class="muted small">Historik (senaste 10)</div>
-      <div id="history" class="list"></div>
     </section>
   </div>
-
-  <div class="sp"></div>
-  <section class="card">
-    <div class="muted small">Tips: lägg till som app</div>
-    <div class="small">iOS Safari → Dela → Lägg till på hemskärmen. Offline funkar via service worker.</div>
-  </section>
 </div>
 
 <script>
-const SITE_URL = ''; // din URL efter Netlify/GitHub
-const TARGET_REPS = { min: 5, max: 8 };
+/* ==================== KONFIG ==================== */
+const SITE_URL = 'https://oskamoberg.github.io/gym-pwa/';
+const TARGET = { min: 5, max: 8 }; // målreps för toppset
 
-const DB_NAME = 'gymlogger_db';
-const STORE = 'workouts';
-let db;
+/* ==================== INDDEXEDDB ==================== */
+const DB_NAME = 'gymlogger_db'; const STORE = 'workouts'; let db;
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB_NAME,1);
+  r.onupgradeneeded=e=>{const d=e.target.result; d.objectStoreNames.contains(STORE)||d.createObjectStore(STORE,{keyPath:'id',autoIncrement:true});};
+  r.onsuccess=()=>{db=r.result;res()}; r.onerror=()=>rej(r.error)});}
+function idbAdd(workout){ return new Promise((res,rej)=>{ const tx=db.transaction(STORE,'readwrite');
+  tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); tx.objectStore(STORE).add(workout); });}
+function idbAll(){ return new Promise((res,rej)=>{ const tx=db.transaction(STORE,'readonly');
+  const st=tx.objectStore(STORE); const r=st.getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });}
 
-function idbOpen(){
-  return new Promise((resolve, reject)=>{
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = e=>{
-      const d = e.target.result;
-      if(!d.objectStoreNames.contains(STORE)){
-        d.createObjectStore(STORE, { keyPath:'id', autoIncrement:true });
-      }
-    };
-    req.onsuccess = ()=>{ db=req.result; resolve(); };
-    req.onerror = ()=>reject(req.error);
+/* ==================== UTIL ==================== */
+const $=q=>document.querySelector(q);
+const fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
+const todayISO=()=>new Date().toISOString().slice(0,10);
+const epley=(w,r)=> r>1 ? w*(1+r/30) : w;
+
+/* ==================== STATE ==================== */
+let currentSets=[]; // {weightKg, reps, done}
+
+/* ==================== UI HELPERS ==================== */
+function renderCurrent(){
+  const tb = $('#currentTbody'); tb.innerHTML='';
+  currentSets.forEach((s,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td>${fmt(s.weightKg)}kg</td>
+      <td>${s.reps}</td>
+      <td>${s.done?'<span class="ok">X</span>':'<span class="muted">—</span>'}
+          <button class="btn ghost" style="margin-left:8px" data-i="${i}">Ta bort</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+  // delete handlers
+  tb.querySelectorAll('button[data-i]').forEach(b=>{
+    b.onclick=()=>{ const i=+b.dataset.i; currentSets.splice(i,1); renderCurrent(); computeSuggestion(); };
   });
 }
-function idbAdd(workout){
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction(STORE,'readwrite');
-    tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error);
-    tx.objectStore(STORE).add(workout);
+function renderHistoryForExercise(all, ex){
+  const list = $('#history'); list.innerHTML='';
+  const filt = all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO)).slice(0,10);
+  filt.forEach(w=>{
+    const div=document.createElement('div');
+    div.className='pill';
+    div.textContent = `${w.dateISO} • ${w.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ')} • 1RM ${fmt(w.est1RM)}`;
+    list.appendChild(div);
   });
-}
-function idbAll(){
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction(STORE,'readonly');
-    const store = tx.objectStore(STORE);
-    const req = store.getAll();
-    req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
-  });
-}
-
-const $ = sel => document.querySelector(sel);
-const fmt = n => Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
-function epley1RM(weight, reps){ return reps>1 ? weight*(1+reps/30) : weight; }
-function todayISO(){ return new Date().toISOString().slice(0,10); }
-function copyToClipboard(t){ navigator.clipboard?.writeText(t); }
-function download(filename, text){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
-  a.download=filename; a.click(); URL.revokeObjectURL(a.href);
-}
-
-const EXERCISES = ['Marklyft','Bänkpress','Knäböj','Militärpress','Chins','Rodd'];
-const exerciseInput = $('#exercise');
-const dateInput = $('#date');
-const setsDiv = $('#sets');
-const adviceDiv = $('#advice');
-const lastMeta = $('#lastMeta');
-const lastSummary = $('#lastSummary');
-const last1rm = $('#last1rm');
-const historyDiv = $('#history');
-
-function populateExerciseList(){
-  const dl = document.getElementById('exerciseList');
-  dl.innerHTML='';
-  EXERCISES.forEach(x=>{
-    const o=document.createElement('option'); o.value=x; dl.appendChild(o);
-  });
-}
-function addSetRow(weight='', reps=''){
-  const wrap = document.createElement('div');
-  wrap.className='setrow';
-  wrap.innerHTML = `
-    <input inputmode="decimal" placeholder="Vikt (kg)" value="${weight}">
-    <input inputmode="numeric" placeholder="Reps" value="${reps}">
-    <button class="ghost" type="button">Ta bort</button>
-  `;
-  const [w, r, del] = wrap.children;
-  del.addEventListener('click',()=>wrap.remove());
-  setsDiv.appendChild(wrap);
-}
-async function refreshLastAndHistory(){
-  const all = await idbAll();
-  const ex = exerciseInput.value?.trim();
-  const filt = all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
   const last = filt[0];
   if(last){
-    const setTxt = last.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ');
-    lastSummary.textContent = `${last.dateISO} • ${setTxt}`;
-    last1rm.textContent = fmt(last.est1RM);
-    lastMeta.textContent = `Senast: ${last.dateISO} — toppset ${fmt(Math.max(...last.sets.map(s=>s.weightKg)))} kg`;
+    const topW = Math.max(...last.sets.map(s=>s.weightKg));
+    const top = last.sets.find(s=>s.weightKg===topW);
+    $('#lastMax').textContent = `${fmt(top.weightKg)}kg × ${top.reps}`;
+    $('#lastDate').textContent = last.dateISO;
   } else {
-    lastSummary.textContent = '—';
-    last1rm.textContent = '—';
-    lastMeta.textContent = 'Ingen historik ännu';
+    $('#lastMax').textContent = '—';
+    $('#lastDate').textContent = '—';
   }
-  historyDiv.innerHTML='';
-  filt.slice(0,10).forEach(w=>{
-    const div = document.createElement('div');
-    div.className='pill';
-    const txt = `${w.dateISO} • ${w.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ')} • 1RM ${fmt(w.est1RM)}`;
-    div.textContent = txt; historyDiv.appendChild(div);
+}
+
+/* ==================== PROGRESSION-LOGIK ==================== */
+/*
+  Enkel, transparent v1:
+  - Utgå från dagens toppset (högsta vikt i currentSets). Om inga set: utgå från senaste passets toppset.
+  - Regeln på toppset:
+      reps >= TARGET.max  → +5 kg nästa
+      reps inom [min,max] → +2.5 kg nästa
+      reps <= min-1       → −2.5 kg nästa (teknikfokus)
+  - Vi föreslår 3 reps på höjning (säkert) – som i din mockup "140kg (förslag), 3 (Förslag)".
+*/
+function computeSuggestion(){
+  const ex = $('#exercise').value;
+  const rows = currentSets;
+  const topToday = rows.length? rows.reduce((a,b)=> a.weightKg>b.weightKg? a:b) : null;
+
+  function nextFromTop(top){
+    if(!top) return null;
+    if(top.reps >= TARGET.max) return {weightKg: top.weightKg+5, reps:3};
+    if(top.reps >= TARGET.min) return {weightKg: top.weightKg+2.5, reps:3};
+    return {weightKg: Math.max(top.weightKg-2.5, 0), reps: TARGET.min}; // back-off om du var under
+  }
+
+  // hämta senaste passet om vi inte har set ännu
+  idbAll().then(all=>{
+    const filt = all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
+    const last = filt[0] || null;
+    const lastTop = last ? last.sets.reduce((a,b)=> a.weightKg>b.weightKg? a:b) : null;
+
+    const basis = topToday || lastTop;
+    const sug = nextFromTop(basis);
+    if(sug){
+      $('#sugWeight').textContent = `${fmt(sug.weightKg)}kg`;
+      $('#sugReps').textContent = `${sug.reps}`;
+    } else {
+      $('#sugWeight').textContent = '—';
+      $('#sugReps').textContent = '—';
+    }
   });
 }
-function computeAdvice(){
-  const ex = exerciseInput.value?.trim(); if(!ex){ adviceDiv.textContent='Välj en övning.'; return; }
-  const rows = [...setsDiv.querySelectorAll('.setrow')];
-  if(rows.length===0){ adviceDiv.textContent=`Sikta på ${TARGET_REPS.min}–${TARGET_REPS.max} reps på toppset.`; return; }
-  const sets = rows.map(r=>({ weightKg: +r.children[0].value||0, reps:+r.children[1].value||0 }))
-                   .filter(s=>s.weightKg>0 && s.reps>0);
-  if(sets.length===0){ adviceDiv.textContent=`Fyll i vikt och reps.`; return; }
-  const top = sets.reduce((a,b)=> a.weightKg>b.weightKg? a : b);
-  const top1rm = epley1RM(top.weightKg, top.reps);
-  let rec;
-  if(top.reps >= TARGET_REPS.max){ rec = `Öka vikten med 2.5–5 kg nästa pass.`; }
-  else if(top.reps <= TARGET_REPS.min-1){ rec = `Minska vikten ~2.5 kg och sikta på ren teknik.`; }
-  else { rec = `Behåll vikten, jaga fler reps inom ${TARGET_REPS.min}–${TARGET_REPS.max}.`; }
-  adviceDiv.textContent = `Toppset idag: ${fmt(top.weightKg)}×${top.reps} (est 1RM ${fmt(top1rm)}). ${rec}`;
-}
-function getSetsFromUI(){
-  return [...setsDiv.querySelectorAll('.setrow')].map(r=>({
-    weightKg: +r.children[0].value||0,
-    reps: +r.children[1].value||0,
-  })).filter(s=>s.weightKg>0 && s.reps>0);
-}
+
+/* ==================== SAVE / EXPORT ==================== */
 async function saveWorkout(){
-  const exercise = exerciseInput.value?.trim();
-  if(!exercise) return alert('Välj/skriv en övning.');
-  const sets = getSetsFromUI();
-  if(sets.length===0) return alert('Lägg till minst ett set.');
-  const dateISO = dateInput.value || todayISO();
-  const est1RM = Math.max(...sets.map(s=>epley1RM(s.weightKg,s.reps)));
-  const workout = { dateISO, exercise, sets, est1RM, notes: document.getElementById('notes').value || '' };
+  const ex = $('#exercise').value;
+  if(!ex) return alert('Välj en övning.');
+  if(currentSets.length===0) return alert('Lägg till minst ett set.');
+  const dateISO = $('#date').value || todayISO();
+  const est1RM = Math.max(...currentSets.map(s=>epley(s.weightKg,s.reps)));
+  const workout = { dateISO, exercise: ex, sets: currentSets, est1RM, notes:'' };
   await idbAdd(workout);
-  await refreshLastAndHistory();
-  computeAdvice();
-  alert('Pass sparat.');
+  const all = await idbAll();
+  renderHistoryForExercise(all, ex);
+  currentSets=[];
+  renderCurrent();
+  computeSuggestion();
+  alert('Pass sparat ✅');
 }
 async function exportJSON(){
   const all = await idbAll();
-  download(`workouts_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(all,null,2));
+  const txt = JSON.stringify(all,null,2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
+  a.download=`workouts_${todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href);
 }
 async function exportCSV(){
   const all = await idbAll();
-  const rows = [['dateISO','exercise','setIndex','weightKg','reps','est1RM','notes']];
-  all.forEach(w=>{
-    w.sets.forEach((s,i)=>{
-      rows.push([w.dateISO, w.exercise, i+1, s.weightKg, s.reps, w.est1RM.toFixed(1), (w.notes||'').replaceAll('\n',' ')])
-    })
-  });
+  const rows = [['dateISO','exercise','setIndex','weightKg','reps','est1RM']];
+  all.forEach(w=> w.sets.forEach((s,i)=> rows.push([w.dateISO,w.exercise,i+1,s.weightKg,s.reps,w.est1RM.toFixed(1)])));
   const csv = rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');
-  download(`workouts_${new Date().toISOString().slice(0,10)}.csv`, csv);
-}
-async function copyLinkedIn(){
-  const ex = exerciseInput.value?.trim()||'Träning';
-  const sets = getSetsFromUI();
-  const est = sets.length? Math.max(...sets.map(s=>epley1RM(s.weightKg,s.reps))) : null;
-  const setTxt = sets.length? sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ') : '—';
-  const post = `Bygger ett eget PWA-verktyg för att logga träning (gratis, offline, enkelt).\n\nDagens ${ex}: ${setTxt}${est?` (est 1RM ${fmt(est)} kg)`:''}.\n\nMVP = logga set, se historik, få enkel progression. Export till CSV/JSON för dashboard.\n\nVill du testa? ${SITE_URL}\n\n#träning #programmering #pwa #byggersjälv`;
-  copyToClipboard(post);
-  alert('LinkedIn-text kopierad. Klistra in i ett inlägg.');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`workouts_${todayISO()}.csv`; a.click(); URL.revokeObjectURL(a.href);
 }
 
-(async function(){
+/* ==================== INIT & EVENTS ==================== */
+(async function init(){
   await idbOpen();
-  populateExerciseList();
-  dateInput.value = todayISO();
-  addSetRow();
-  exerciseInput.value = 'Marklyft';
-  await refreshLastAndHistory();
-  computeAdvice();
+  $('#date').value = todayISO();
+  renderCurrent();
+  const all = await idbAll();
+  renderHistoryForExercise(all, $('#exercise').value);
+  computeSuggestion();
 })();
-
-$('#addSet').addEventListener('click',()=>{ addSetRow(); computeAdvice(); });
+$('#exercise').addEventListener('change', async ()=>{
+  const all = await idbAll(); renderHistoryForExercise(all, $('#exercise').value); computeSuggestion();
+});
+$('#add').addEventListener('click', ()=>{
+  const w = +($('#weight').value||0); const r = +($('#reps').value||0);
+  if(w<=0 || r<=0) return alert('Ange både vikt och reps.');
+  currentSets.push({weightKg:w, reps:r, done:true});
+  $('#weight').value=''; $('#reps').value='';
+  renderCurrent(); computeSuggestion();
+});
 $('#save').addEventListener('click', saveWorkout);
 $('#exportJSON').addEventListener('click', exportJSON);
 $('#exportCSV').addEventListener('click', exportCSV);
-$('#copyLI').addEventListener('click', copyLinkedIn);
-['input','change'].forEach(ev=>{
-  $('#exercise').addEventListener(ev, ()=>{ refreshLastAndHistory(); computeAdvice(); });
-  $('#sets').addEventListener(ev, (e)=>{ if(e.target.tagName==='INPUT') computeAdvice(); });
-});
 
+/* SERVICE WORKER REG FÖR OFFLINE */
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('./service-worker.js');
-  });
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('./service-worker.js'));
 }
 </script>
 </body>
