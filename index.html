@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Gym Logger — Pass.v2</title>
+  <title>Gym Logger — Pass</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#111827" />
   <style>
@@ -16,10 +16,8 @@
     .col{flex:1 1 260px}
     label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
     select,input,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #243244;background:#000;color:var(--text);font-weight:700}
-    input::placeholder{color:#64748b}
     .btn{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;cursor:pointer}
     .btn.ghost{background:transparent;border:1px solid #334155;font-weight:600}
-    .btn.save{background:linear-gradient(180deg,#22c55e,#16a34a);font-size:18px}
     .title{font-size:22px;font-weight:800;margin:0 0 10px}
     .muted{color:var(--muted);font-size:12px}
     .sp{height:10px}
@@ -63,7 +61,7 @@
 
       <div class="sp"></div>
 
-      <!-- Svarta rutor för vikt/reps + Addera -->
+      <!-- Inputs + Addera -->
       <div class="row">
         <div class="col">
           <label>Vikt (kg)</label>
@@ -80,7 +78,7 @@
 
       <div class="sp"></div>
 
-      <!-- Tabell: Pågående set + Förslagsrad -->
+      <!-- Tabell -->
       <table>
         <thead>
           <tr>
@@ -89,14 +87,12 @@
             <th>Färdigt?</th>
           </tr>
         </thead>
-        <tbody id="currentTbody">
-          <!-- dynamiska rader här -->
-        </tbody>
+        <tbody id="currentTbody"></tbody>
         <tbody>
           <tr id="suggestRow">
             <td class="warn" id="sugWeight">–</td>
             <td class="warn" id="sugReps">–</td>
-            <td class="warn">Förslag</td>
+            <td class="warn" id="sugNote">Förslag</td>
           </tr>
         </tbody>
       </table>
@@ -108,10 +104,10 @@
       </div>
 
       <div class="sp"></div>
-      <button id="save" class="btn save">Spara</button>
+      <div class="pill" id="autosaveStatus">Autosparat</div>
     </section>
 
-    <!-- HÖGER: KORT HISTORIK & EXPORT -->
+    <!-- HÖGER: HISTORIK -->
     <section class="card">
       <h2 class="title">Historik</h2>
       <div class="muted">Senaste 10 för vald övning:</div>
@@ -128,165 +124,157 @@
 <script>
 /* ==================== KONFIG ==================== */
 const SITE_URL = 'https://oskamoberg.github.io/gym-pwa/';
-const TARGET = { min: 5, max: 8 }; // målreps för toppset
+const TARGET = { min: 6, max: 8 };
+const WORK_SETS = 3;
+const WARMUP_STEPS = [0.5,0.7,0.85];
+const INCREASE = 2.5;
+const BIG_INCREASE = 5;
 
-/* ==================== INDDEXEDDB ==================== */
-const DB_NAME = 'gymlogger_db'; const STORE = 'workouts'; let db;
-function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB_NAME,1);
-  r.onupgradeneeded=e=>{const d=e.target.result; d.objectStoreNames.contains(STORE)||d.createObjectStore(STORE,{keyPath:'id',autoIncrement:true});};
-  r.onsuccess=()=>{db=r.result;res()}; r.onerror=()=>rej(r.error)});}
-function idbAdd(workout){ return new Promise((res,rej)=>{ const tx=db.transaction(STORE,'readwrite');
-  tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); tx.objectStore(STORE).add(workout); });}
-function idbAll(){ return new Promise((res,rej)=>{ const tx=db.transaction(STORE,'readonly');
-  const st=tx.objectStore(STORE); const r=st.getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });}
+/* ==================== DB ==================== */
+const DB_NAME = 'gymlogger_db'; const STORE='workouts'; let db;
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,1);
+r.onupgradeneeded=e=>{const d=e.target.result;d.objectStoreNames.contains(STORE)||d.createObjectStore(STORE,{keyPath:'id',autoIncrement:true});};
+r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>rej(r.error);});}
+function idbAdd(workout){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');
+tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore(STORE).add(workout);});}
+function idbAll(){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readonly');
+const st=tx.objectStore(STORE);const r=st.getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function idbUpsertByDateExercise(dateISO, exercise, sets){
+  const all=await idbAll();
+  const found=all.find(w=>w.dateISO===dateISO && w.exercise===exercise);
+  const est1RM=Math.max(...sets.map(s=>epley(s.weightKg,s.reps)));
+  if(found){
+    await new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');
+    const st=tx.objectStore(STORE);st.delete(found.id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
+    await idbAdd({id:found.id,dateISO,exercise,sets,est1RM,notes:found.notes||''});
+  }else{
+    await idbAdd({dateISO,exercise,sets,est1RM,notes:''});
+  }
+  $('#autosaveStatus').textContent='Autosparat ✅';setTimeout(()=>$('#autosaveStatus').textContent='Autosparat',1000);
+}
 
 /* ==================== UTIL ==================== */
 const $=q=>document.querySelector(q);
 const fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
 const todayISO=()=>new Date().toISOString().slice(0,10);
-const epley=(w,r)=> r>1 ? w*(1+r/30) : w;
+const epley=(w,r)=>r>1?w*(1+r/30):w;
 
 /* ==================== STATE ==================== */
-let currentSets=[]; // {weightKg, reps, done}
+let currentSets=[];
 
-/* ==================== UI HELPERS ==================== */
+/* ==================== LOGIK ==================== */
+function lastWorkingSummary(all, exercise){
+  const sessions=all.filter(w=>w.exercise===exercise).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
+  if(!sessions.length)return null;
+  const sets=[...sessions[0].sets].sort((a,b)=>b.weightKg-a.weightKg);
+  const topW=sets[0]?.weightKg??null;
+  const workSets=sets.filter(s=>s.weightKg>=(topW-0.5));
+  return{dateISO:sessions[0].dateISO,workSets};
+}
+function nextTargetWeight(all, exercise){
+  const last=lastWorkingSummary(all,exercise);
+  if(!last||!last.workSets.length)return null;
+  const w=last.workSets[0].weightKg;
+  const reps=last.workSets.map(s=>s.reps);
+  const allEight=reps.length>=3&&reps.every(r=>r>=8);
+  const anyFive=reps.some(r=>r<=5);
+  if(allEight)return w+BIG_INCREASE;
+  if(anyFive)return Math.max(0,w-INCREASE);
+  return w;
+}
+function plannedSetsForSession(targetWeight){
+  const warmups=WARMUP_STEPS.map(p=>({weightKg:Math.round(targetWeight*p/2.5)*2.5,reps:p===0.85?1:(p===0.7?3:5),type:'warmup'}));
+  const work=Array.from({length:WORK_SETS},(_,i)=>({weightKg:targetWeight,reps:i===WORK_SETS-1?'AMRAP':'6–8',type:'work',idx:i+1}));
+  return[...warmups,...work];
+}
+
 function renderCurrent(){
-  const tb = $('#currentTbody'); tb.innerHTML='';
+  const tb=$('#currentTbody');tb.innerHTML='';
   currentSets.forEach((s,i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML = `
-      <td>${fmt(s.weightKg)}kg</td>
-      <td>${s.reps}</td>
-      <td>${s.done?'<span class="ok">X</span>':'<span class="muted">—</span>'}
-          <button class="btn ghost" style="margin-left:8px" data-i="${i}">Ta bort</button>
-      </td>`;
+    tr.innerHTML=`<td>${fmt(s.weightKg)}kg</td><td>${s.reps}</td>
+    <td><span class="ok">X</span>
+    <button class="btn ghost" style="margin-left:8px" data-i="${i}">Ta bort</button></td>`;
     tb.appendChild(tr);
   });
-  // delete handlers
   tb.querySelectorAll('button[data-i]').forEach(b=>{
-    b.onclick=()=>{ const i=+b.dataset.i; currentSets.splice(i,1); renderCurrent(); computeSuggestion(); };
+    b.onclick=async()=>{const i=+b.dataset.i;currentSets.splice(i,1);renderCurrent();
+      await idbUpsertByDateExercise($('#date').value||todayISO(),$('#exercise').value,currentSets);computeSuggestion();};
   });
 }
-function renderHistoryForExercise(all, ex){
-  const list = $('#history'); list.innerHTML='';
-  const filt = all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO)).slice(0,10);
+function renderHistory(all,ex){
+  const list=$('#history');list.innerHTML='';
+  const filt=all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO)).slice(0,10);
   filt.forEach(w=>{
-    const div=document.createElement('div');
-    div.className='pill';
-    div.textContent = `${w.dateISO} • ${w.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ')} • 1RM ${fmt(w.est1RM)}`;
+    const div=document.createElement('div');div.className='pill';
+    div.textContent=`${w.dateISO} • ${w.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ')} • 1RM ${fmt(w.est1RM)}`;
     list.appendChild(div);
   });
-  const last = filt[0];
+  const last=filt[0];
   if(last){
-    const topW = Math.max(...last.sets.map(s=>s.weightKg));
-    const top = last.sets.find(s=>s.weightKg===topW);
-    $('#lastMax').textContent = `${fmt(top.weightKg)}kg × ${top.reps}`;
-    $('#lastDate').textContent = last.dateISO;
-  } else {
-    $('#lastMax').textContent = '—';
-    $('#lastDate').textContent = '—';
+    const topW=Math.max(...last.sets.map(s=>s.weightKg));
+    const top=last.sets.find(s=>s.weightKg===topW);
+    $('#lastMax').textContent=`${fmt(top.weightKg)}kg × ${top.reps}`;
+    $('#lastDate').textContent=last.dateISO;
+  }else{$('#lastMax').textContent='—';$('#lastDate').textContent='—';}
+}
+async function computeSuggestion(){
+  const ex=$('#exercise').value;
+  const dateISO=$('#date').value||todayISO();
+  const all=await idbAll();
+  const target=nextTargetWeight(all,ex)??(currentSets.length?currentSets.reduce((a,b)=>a.weightKg>b.weightKg?a:b).weightKg:60);
+  const plan=plannedSetsForSession(target);
+  const doneToday=currentSets.length;
+  if(doneToday>=plan.length){
+    $('#sugWeight').textContent='—';$('#sugReps').textContent='—';$('#sugNote').textContent='Klart för idag ✅';return;
   }
+  const next=plan[doneToday];
+  $('#sugWeight').textContent=`${fmt(next.weightKg)}kg`;
+  $('#sugReps').textContent=`${next.reps}`;
+  $('#sugNote').textContent=(next.type==='work'&&next.idx===WORK_SETS)?'Sista – maxa reps':'Förslag';
 }
 
-/* ==================== PROGRESSION-LOGIK ==================== */
-/*
-  Enkel, transparent v1:
-  - Utgå från dagens toppset (högsta vikt i currentSets). Om inga set: utgå från senaste passets toppset.
-  - Regeln på toppset:
-      reps >= TARGET.max  → +5 kg nästa
-      reps inom [min,max] → +2.5 kg nästa
-      reps <= min-1       → −2.5 kg nästa (teknikfokus)
-  - Vi föreslår 3 reps på höjning (säkert) – som i din mockup "140kg (förslag), 3 (Förslag)".
-*/
-function computeSuggestion(){
-  const ex = $('#exercise').value;
-  const rows = currentSets;
-  const topToday = rows.length? rows.reduce((a,b)=> a.weightKg>b.weightKg? a:b) : null;
-
-  function nextFromTop(top){
-    if(!top) return null;
-    if(top.reps >= TARGET.max) return {weightKg: top.weightKg+5, reps:3};
-    if(top.reps >= TARGET.min) return {weightKg: top.weightKg+2.5, reps:3};
-    return {weightKg: Math.max(top.weightKg-2.5, 0), reps: TARGET.min}; // back-off om du var under
-  }
-
-  // hämta senaste passet om vi inte har set ännu
-  idbAll().then(all=>{
-    const filt = all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
-    const last = filt[0] || null;
-    const lastTop = last ? last.sets.reduce((a,b)=> a.weightKg>b.weightKg? a:b) : null;
-
-    const basis = topToday || lastTop;
-    const sug = nextFromTop(basis);
-    if(sug){
-      $('#sugWeight').textContent = `${fmt(sug.weightKg)}kg`;
-      $('#sugReps').textContent = `${sug.reps}`;
-    } else {
-      $('#sugWeight').textContent = '—';
-      $('#sugReps').textContent = '—';
-    }
-  });
-}
-
-/* ==================== SAVE / EXPORT ==================== */
-async function saveWorkout(){
-  const ex = $('#exercise').value;
-  if(!ex) return alert('Välj en övning.');
-  if(currentSets.length===0) return alert('Lägg till minst ett set.');
-  const dateISO = $('#date').value || todayISO();
-  const est1RM = Math.max(...currentSets.map(s=>epley(s.weightKg,s.reps)));
-  const workout = { dateISO, exercise: ex, sets: currentSets, est1RM, notes:'' };
-  await idbAdd(workout);
-  const all = await idbAll();
-  renderHistoryForExercise(all, ex);
-  currentSets=[];
-  renderCurrent();
-  computeSuggestion();
-  alert('Pass sparat ✅');
-}
-async function exportJSON(){
-  const all = await idbAll();
-  const txt = JSON.stringify(all,null,2);
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
-  a.download=`workouts_${todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href);
-}
-async function exportCSV(){
-  const all = await idbAll();
-  const rows = [['dateISO','exercise','setIndex','weightKg','reps','est1RM']];
-  all.forEach(w=> w.sets.forEach((s,i)=> rows.push([w.dateISO,w.exercise,i+1,s.weightKg,s.reps,w.est1RM.toFixed(1)])));
-  const csv = rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download=`workouts_${todayISO()}.csv`; a.click(); URL.revokeObjectURL(a.href);
-}
-
-/* ==================== INIT & EVENTS ==================== */
+/* ==================== EVENTS ==================== */
 (async function init(){
   await idbOpen();
-  $('#date').value = todayISO();
-  renderCurrent();
-  const all = await idbAll();
-  renderHistoryForExercise(all, $('#exercise').value);
-  computeSuggestion();
+  $('#date').value=todayISO();
+  const all=await idbAll();
+  const existing=all.find(w=>w.dateISO===todayISO()&&w.exercise===$('#exercise').value);
+  if(existing){currentSets=existing.sets;}
+  renderCurrent();renderHistory(all,$('#exercise').value);computeSuggestion();
 })();
-$('#exercise').addEventListener('change', async ()=>{
-  const all = await idbAll(); renderHistoryForExercise(all, $('#exercise').value); computeSuggestion();
+$('#exercise').addEventListener('change',async()=>{
+  const all=await idbAll();renderHistory(all,$('#exercise').value);computeSuggestion();
 });
-$('#add').addEventListener('click', ()=>{
-  const w = +($('#weight').value||0); const r = +($('#reps').value||0);
-  if(w<=0 || r<=0) return alert('Ange både vikt och reps.');
-  currentSets.push({weightKg:w, reps:r, done:true});
-  $('#weight').value=''; $('#reps').value='';
-  renderCurrent(); computeSuggestion();
+$('#add').addEventListener('click',async()=>{
+  const w=+($('#weight').value||0);const r=+($('#reps').value||0);
+  if(w<=0||r<=0)return alert('Ange både vikt och reps.');
+  currentSets.push({weightKg:w,reps:r,done:true});
+  $('#weight').value='';$('#reps').value='';
+  renderCurrent();
+  await idbUpsertByDateExercise($('#date').value||todayISO(),$('#exercise').value,currentSets);
+  computeSuggestion();
 });
-$('#save').addEventListener('click', saveWorkout);
-$('#exportJSON').addEventListener('click', exportJSON);
-$('#exportCSV').addEventListener('click', exportCSV);
+$('#exportJSON').addEventListener('click',async()=>{
+  const all=await idbAll();
+  const txt=JSON.stringify(all,null,2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
+  a.download=`workouts_${todayISO()}.json`;a.click();URL.revokeObjectURL(a.href);
+});
+$('#exportCSV').addEventListener('click',async()=>{
+  const all=await idbAll();
+  const rows=[['dateISO','exercise','setIndex','weightKg','reps','est1RM']];
+  all.forEach(w=>w.sets.forEach((s,i)=>rows.push([w.dateISO,w.exercise,i+1,s.weightKg,s.reps,w.est1RM.toFixed(1)])));
+  const csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`workouts_${todayISO()}.csv`;a.click();URL.revokeObjectURL(a.href);
+});
 
-/* SERVICE WORKER REG FÖR OFFLINE */
+/* ==================== SERVICE WORKER ==================== */
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('./service-worker.js'));
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker-v3.js'));
 }
 </script>
 </body>
