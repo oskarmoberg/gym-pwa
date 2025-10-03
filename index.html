@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Gym Logger — Oskar MVP</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#111827" />
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --acc:#22c55e; --red:#ef4444; }
+    *{box-sizing:border-box;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Inter,Roboto}
+    body{margin:0;background:linear-gradient(180deg,#0b1220,#0f172a);color:var(--text)}
+    .wrap{max-width:860px;margin:0 auto;padding:16px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin:8px 0 16px}
+    h1{font-size:22px;margin:0}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .col{flex:1 1 260px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input,select,textarea,button{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #243244;background:#0b1220;color:var(--text)}
+    input::placeholder{color:#64748b}
+    button{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;font-weight:700;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid #334155}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#0b1220;border:1px solid #253043;color:#cbd5e1;font-size:12px}
+    .list{display:grid;gap:10px}
+    .setrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center}
+    .muted{color:#94a3b8}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:720px){.grid{grid-template-columns:1.2fr .8fr}}
+    .sp{height:8px}
+    .small{font-size:12px}
+    .hl{color:#86efac}
+    .divider{height:1px;background:#1f2937;margin:8px 0}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Gym Logger</h1>
+    <div class="pill">MVP • Offline • PWA</div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <div class="row">
+        <div class="col">
+          <label>Övning</label>
+          <input id="exercise" list="exerciseList" placeholder="t.ex. Marklyft" />
+          <datalist id="exerciseList"></datalist>
+          <div class="small muted" id="lastMeta"></div>
+        </div>
+        <div class="col">
+          <label>Datum</label>
+          <input type="date" id="date" />
+        </div>
+      </div>
+      <div class="sp"></div>
+      <div id="sets" class="list"></div>
+      <button id="addSet">+ Lägg till set</button>
+      <div class="sp"></div>
+      <label>Anteckningar (valfritt)</label>
+      <textarea id="notes" rows="2" placeholder="Känsla, teknik, sömn, osv…"></textarea>
+      <div class="sp"></div>
+      <div class="row">
+        <div class="col"><button id="save">Spara pass</button></div>
+        <div class="col"><button class="ghost" id="copyLI">Copy LinkedIn Post</button></div>
+      </div>
+      <div class="sp"></div>
+      <div class="small muted" id="advice">Rekommendation kommer här…</div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div>
+          <div class="muted small">Senaste för vald övning</div>
+          <div id="lastSummary" style="font-weight:700"></div>
+          <div class="small">Beräknat 1RM: <span id="last1rm" class="hl">–</span></div>
+        </div>
+        <div>
+          <button class="ghost" id="exportJSON">Export JSON</button>
+          <button class="ghost" id="exportCSV">Export CSV</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="muted small">Historik (senaste 10)</div>
+      <div id="history" class="list"></div>
+    </section>
+  </div>
+
+  <div class="sp"></div>
+  <section class="card">
+    <div class="muted small">Tips: lägg till som app</div>
+    <div class="small">iOS Safari → Dela → Lägg till på hemskärmen. Offline funkar via service worker.</div>
+  </section>
+</div>
+
+<script>
+const SITE_URL = ''; // din URL efter Netlify/GitHub
+const TARGET_REPS = { min: 5, max: 8 };
+
+const DB_NAME = 'gymlogger_db';
+const STORE = 'workouts';
+let db;
+
+function idbOpen(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e=>{
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains(STORE)){
+        d.createObjectStore(STORE, { keyPath:'id', autoIncrement:true });
+      }
+    };
+    req.onsuccess = ()=>{ db=req.result; resolve(); };
+    req.onerror = ()=>reject(req.error);
+  });
+}
+function idbAdd(workout){
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE,'readwrite');
+    tx.oncomplete=()=>resolve(); tx.onerror=()=>reject(tx.error);
+    tx.objectStore(STORE).add(workout);
+  });
+}
+function idbAll(){
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE,'readonly');
+    const store = tx.objectStore(STORE);
+    const req = store.getAll();
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+
+const $ = sel => document.querySelector(sel);
+const fmt = n => Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
+function epley1RM(weight, reps){ return reps>1 ? weight*(1+reps/30) : weight; }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function copyToClipboard(t){ navigator.clipboard?.writeText(t); }
+function download(filename, text){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
+  a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+}
+
+const EXERCISES = ['Marklyft','Bänkpress','Knäböj','Militärpress','Chins','Rodd'];
+const exerciseInput = $('#exercise');
+const dateInput = $('#date');
+const setsDiv = $('#sets');
+const adviceDiv = $('#advice');
+const lastMeta = $('#lastMeta');
+const lastSummary = $('#lastSummary');
+const last1rm = $('#last1rm');
+const historyDiv = $('#history');
+
+function populateExerciseList(){
+  const dl = document.getElementById('exerciseList');
+  dl.innerHTML='';
+  EXERCISES.forEach(x=>{
+    const o=document.createElement('option'); o.value=x; dl.appendChild(o);
+  });
+}
+function addSetRow(weight='', reps=''){
+  const wrap = document.createElement('div');
+  wrap.className='setrow';
+  wrap.innerHTML = `
+    <input inputmode="decimal" placeholder="Vikt (kg)" value="${weight}">
+    <input inputmode="numeric" placeholder="Reps" value="${reps}">
+    <button class="ghost" type="button">Ta bort</button>
+  `;
+  const [w, r, del] = wrap.children;
+  del.addEventListener('click',()=>wrap.remove());
+  setsDiv.appendChild(wrap);
+}
+async function refreshLastAndHistory(){
+  const all = await idbAll();
+  const ex = exerciseInput.value?.trim();
+  const filt = all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
+  const last = filt[0];
+  if(last){
+    const setTxt = last.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ');
+    lastSummary.textContent = `${last.dateISO} • ${setTxt}`;
+    last1rm.textContent = fmt(last.est1RM);
+    lastMeta.textContent = `Senast: ${last.dateISO} — toppset ${fmt(Math.max(...last.sets.map(s=>s.weightKg)))} kg`;
+  } else {
+    lastSummary.textContent = '—';
+    last1rm.textContent = '—';
+    lastMeta.textContent = 'Ingen historik ännu';
+  }
+  historyDiv.innerHTML='';
+  filt.slice(0,10).forEach(w=>{
+    const div = document.createElement('div');
+    div.className='pill';
+    const txt = `${w.dateISO} • ${w.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ')} • 1RM ${fmt(w.est1RM)}`;
+    div.textContent = txt; historyDiv.appendChild(div);
+  });
+}
+function computeAdvice(){
+  const ex = exerciseInput.value?.trim(); if(!ex){ adviceDiv.textContent='Välj en övning.'; return; }
+  const rows = [...setsDiv.querySelectorAll('.setrow')];
+  if(rows.length===0){ adviceDiv.textContent=`Sikta på ${TARGET_REPS.min}–${TARGET_REPS.max} reps på toppset.`; return; }
+  const sets = rows.map(r=>({ weightKg: +r.children[0].value||0, reps:+r.children[1].value||0 }))
+                   .filter(s=>s.weightKg>0 && s.reps>0);
+  if(sets.length===0){ adviceDiv.textContent=`Fyll i vikt och reps.`; return; }
+  const top = sets.reduce((a,b)=> a.weightKg>b.weightKg? a : b);
+  const top1rm = epley1RM(top.weightKg, top.reps);
+  let rec;
+  if(top.reps >= TARGET_REPS.max){ rec = `Öka vikten med 2.5–5 kg nästa pass.`; }
+  else if(top.reps <= TARGET_REPS.min-1){ rec = `Minska vikten ~2.5 kg och sikta på ren teknik.`; }
+  else { rec = `Behåll vikten, jaga fler reps inom ${TARGET_REPS.min}–${TARGET_REPS.max}.`; }
+  adviceDiv.textContent = `Toppset idag: ${fmt(top.weightKg)}×${top.reps} (est 1RM ${fmt(top1rm)}). ${rec}`;
+}
+function getSetsFromUI(){
+  return [...setsDiv.querySelectorAll('.setrow')].map(r=>({
+    weightKg: +r.children[0].value||0,
+    reps: +r.children[1].value||0,
+  })).filter(s=>s.weightKg>0 && s.reps>0);
+}
+async function saveWorkout(){
+  const exercise = exerciseInput.value?.trim();
+  if(!exercise) return alert('Välj/skriv en övning.');
+  const sets = getSetsFromUI();
+  if(sets.length===0) return alert('Lägg till minst ett set.');
+  const dateISO = dateInput.value || todayISO();
+  const est1RM = Math.max(...sets.map(s=>epley1RM(s.weightKg,s.reps)));
+  const workout = { dateISO, exercise, sets, est1RM, notes: document.getElementById('notes').value || '' };
+  await idbAdd(workout);
+  await refreshLastAndHistory();
+  computeAdvice();
+  alert('Pass sparat.');
+}
+async function exportJSON(){
+  const all = await idbAll();
+  download(`workouts_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(all,null,2));
+}
+async function exportCSV(){
+  const all = await idbAll();
+  const rows = [['dateISO','exercise','setIndex','weightKg','reps','est1RM','notes']];
+  all.forEach(w=>{
+    w.sets.forEach((s,i)=>{
+      rows.push([w.dateISO, w.exercise, i+1, s.weightKg, s.reps, w.est1RM.toFixed(1), (w.notes||'').replaceAll('\n',' ')])
+    })
+  });
+  const csv = rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');
+  download(`workouts_${new Date().toISOString().slice(0,10)}.csv`, csv);
+}
+async function copyLinkedIn(){
+  const ex = exerciseInput.value?.trim()||'Träning';
+  const sets = getSetsFromUI();
+  const est = sets.length? Math.max(...sets.map(s=>epley1RM(s.weightKg,s.reps))) : null;
+  const setTxt = sets.length? sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ') : '—';
+  const post = `Bygger ett eget PWA-verktyg för att logga träning (gratis, offline, enkelt).\n\nDagens ${ex}: ${setTxt}${est?` (est 1RM ${fmt(est)} kg)`:''}.\n\nMVP = logga set, se historik, få enkel progression. Export till CSV/JSON för dashboard.\n\nVill du testa? ${SITE_URL}\n\n#träning #programmering #pwa #byggersjälv`;
+  copyToClipboard(post);
+  alert('LinkedIn-text kopierad. Klistra in i ett inlägg.');
+}
+
+(async function(){
+  await idbOpen();
+  populateExerciseList();
+  dateInput.value = todayISO();
+  addSetRow();
+  exerciseInput.value = 'Marklyft';
+  await refreshLastAndHistory();
+  computeAdvice();
+})();
+
+$('#addSet').addEventListener('click',()=>{ addSetRow(); computeAdvice(); });
+$('#save').addEventListener('click', saveWorkout);
+$('#exportJSON').addEventListener('click', exportJSON);
+$('#exportCSV').addEventListener('click', exportCSV);
+$('#copyLI').addEventListener('click', copyLinkedIn);
+['input','change'].forEach(ev=>{
+  $('#exercise').addEventListener(ev, ()=>{ refreshLastAndHistory(); computeAdvice(); });
+  $('#sets').addEventListener(ev, (e)=>{ if(e.target.tagName==='INPUT') computeAdvice(); });
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./service-worker.js');
+  });
+}
+</script>
+</body>
+</html>
