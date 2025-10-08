@@ -3,51 +3,95 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <title>Gym Logger — Pass</title>
+  <title>Hitchhiker’s Gym Terminal</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="app.css" />
-  <meta name="theme-color" content="#111827" />
+  <!-- JetBrains Mono -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#0A0E1A" />
   <style>
-    :root { --bg:#0b1220; --card:#0d1322; --muted:#94a3b8; --text:#e5e7eb; --ok:#22c55e; --warn:#ef4444; --border:#1f2937; }
-    *{box-sizing:border-box;font-family:ui-sans-serif,system-ui,-apple-system,Inter,Roboto}
-    body{margin:0;background:var(--bg);color:var(--text)}
-    .wrap{max-width:960px;margin:0 auto;padding:12px}
-    .card{background:#0d1322;border:1px solid var(--border);border-radius:14px;padding:12px}
+    :root{
+      --bg:#0A0E1A; --panel:#111827; --panel-2:#0d1424;
+      --line:#1F2937; --muted:#9CA3AF; --text:#E5E7EB;
+      --ok:#22C55E; --warn:#EF4444; --info:#60A5FA; --amber:#F59E0B;
+      --accent:#00FF99;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;background:radial-gradient(1200px 600px at 20% -10%, #0e1530 0%, var(--bg) 60%) no-repeat fixed;
+      color:var(--text); font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing:.2px;
+    }
+    .wrap{max-width:980px;margin:0 auto;padding:12px}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:860px){.grid{grid-template-columns:1.2fr .8fr}}
+
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));
+      border:1px solid var(--line); border-radius:14px; padding:12px; box-shadow:0 12px 40px rgba(0,0,0,.25)}
+    .title{margin:0 0 8px; font-size:20px; font-weight:800; letter-spacing:.5px}
     .row{display:flex;gap:8px;flex-wrap:wrap}
     .col{flex:1 1 220px}
-    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    label{display:block;color:var(--muted);font-size:12px;margin:0 0 6px}
 
-    /* Inputs – anti-zoom och tydligt */
+    /* Inputs anti-zoom */
     select,input,button{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #243244;background:#000;color:var(--text);font-weight:700;font-size:16px}
     input::placeholder{color:#64748b}
     .btn{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;cursor:pointer}
     .btn.ghost{background:transparent;border:1px solid #334155;font-weight:600}
-    .title{font-size:20px;font-weight:800;margin:0 0 8px}
     .muted{color:var(--muted);font-size:12px}
     .sp{height:8px}
 
-    /* TABELL */
+    /* Header strip */
+    .strip{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+      padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.35)}
+    .hx{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #2a354a;background:#0b1220;font-size:12px;color:#cbd5e1;white-space:nowrap}
+    .badge.ok{border-color:#1d3d2a;background:#0f2415;color:#c7f9d1}
+    .badge.warn{border-color:#4b1d1d;background:#241010;color:#fecaca}
+    .badge.info{border-color:#1d2e4b;background:#0b1424;color:#bfdbfe}
+
+    /* Table compact */
     table{width:100%;border-collapse:collapse;background:#0b1220;border-radius:10px;overflow:hidden;font-size:14px}
-    th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left}
     th{background:#0f172a;font-weight:800}
     tr:last-child td{border-bottom:none}
     .ok{color:var(--ok);font-weight:800}
     .warn{color:var(--warn);font-weight:800}
+    .ghostcell{opacity:.35}
     .delbtn{width:auto;min-width:auto;padding:6px 10px;border-radius:8px;border:1px solid #334155;background:transparent;color:#e5e7eb;font-size:14px;line-height:1}
     .icon{font-size:16px}
-    .ghostcell{opacity:.35}
 
-    /* Layoutgrid */
-    .grid{display:grid;grid-template-columns:1fr;gap:10px}
-    @media(min-width:820px){.grid{grid-template-columns:1.1fr .9fr}}
+    /* Animations */
+    @keyframes pulse{0%{background-color:#16a34a22}100%{background-color:transparent}}
+    tr.added{animation:pulse .6s ease-out}
+    @keyframes glow{0%{box-shadow:0 0 0 rgba(0,255,153,0)}100%{box-shadow:0 0 28px rgba(0,255,153,.15)}}
+    .glow{animation:glow .9s ease-out}
+
+    /* Footer microhumor */
+    .footer{margin-top:10px;color:var(--muted);font-size:12px;opacity:.9;display:flex;gap:8px;align-items:center}
+    .footer:before{content:"⊙";color:#00ff99}
   </style>
 </head>
 <body>
 <div class="wrap">
   <div class="grid">
     <!-- VÄNSTER: PASS -->
-    <section class="card">
-      <h1 class="title">Aktivt pass</h1>
+    <section class="card" id="leftCard">
+      <h1 class="title" id="exerciseTitle">Aktivt pass</h1>
+
+      <!-- Header strip -->
+      <div class="strip">
+        <div class="hx">
+          <span class="badge info" id="targetBadge">Target: —</span>
+          <span class="badge" id="setsBadge">Set: 0/0</span>
+        </div>
+        <div class="hx">
+          <span class="badge" id="dateBadge">Datum: —</span>
+        </div>
+      </div>
+
+      <div class="sp"></div>
 
       <!-- Övning & datum -->
       <div class="row">
@@ -63,13 +107,13 @@
 
       <div class="sp"></div>
 
-      <!-- TABELL: Plan (rött) + Gjorda (grönt) i samma lista -->
-      <table>
+      <!-- TABELL -->
+      <table id="sessionTable">
         <thead>
           <tr>
             <th>Vikt</th>
             <th>Reps</th>
-            <th style="width:100px">Klar</th>
+            <th style="width:96px">Status</th>
             <th style="width:64px"></th>
           </tr>
         </thead>
@@ -78,7 +122,7 @@
 
       <div class="sp"></div>
 
-      <!-- Inputs + Addera -->
+      <!-- Inputs + addera -->
       <div class="row">
         <div class="col">
           <label>Vikt (kg)</label>
@@ -98,6 +142,8 @@
         <div class="col"><div class="muted" id="lastMaxBox">Senaste max: —</div></div>
         <div class="col"><div class="muted" id="lastDateBox">Senaste datum: —</div></div>
       </div>
+
+      <div class="footer" id="humor"></div>
     </section>
 
     <!-- HÖGER: HISTORIK -->
@@ -121,7 +167,7 @@
 <script src="nav.js"></script>
 
 <script>
-/* ==================== IndexedDB ==================== */
+/* ======= IndexedDB ======= */
 const DB_NAME='gymlogger_db';
 let db;
 function idbOpen(){
@@ -149,11 +195,11 @@ async function idbUpsertByDateExercise(dateISO, exercise, sets){
   }
 }
 
-/* ==================== Övningar ==================== */
+/* ======= Övningar ======= */
 function exAll(){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readonly');const st=tx.objectStore('exercises');const g=st.getAll();g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});}
 function exPut(ex){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore('exercises').put(ex);});}
 
-/* ==================== Util ==================== */
+/* ======= Util ======= */
 const $=q=>document.querySelector(q);
 const fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
 const todayISO=()=>new Date().toISOString().slice(0,10);
@@ -165,11 +211,12 @@ function parseNumber(value){
   const n = Number(v); return Number.isFinite(n) ? n : 0;
 }
 
-/* ==================== State ==================== */
-let currentSets=[]; // {weightKg,reps}
-let currentPlan=[]; // [{weightKg,reps,type,idx}] computed
+/* ======= State & plan ======= */
+let currentSets=[];         // {weightKg,reps}
+let currentPlan=[];         // planerade set
+const sessionTargetCache={}; // nyckel: `${exName}|${dateISO}` → vikt (låst)
 
-/* ==================== Seed defaults ==================== */
+/* ======= Seed defaults ======= */
 async function seedExercisesIfEmpty(){
   const list = await exAll(); if(list.length) return;
   const defaults = [
@@ -183,7 +230,7 @@ async function seedExercisesIfEmpty(){
   for(const ex of defaults) await exPut(ex);
 }
 
-/* ==================== Planlogik ==================== */
+/* ======= Planlogik ======= */
 async function getParamsFor(name){
   const all = await exAll(); const ex = all.find(x=>x.name===name);
   return ex || { name, category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3 };
@@ -195,8 +242,8 @@ function lastWorkingSummary(all, exercise, workSets){
   if(!sets.length) return null;
   return { dateISO:sessions[0].dateISO, workSets: sets };
 }
-async function nextTargetWeight(allWorkouts, params, exName){
-  const last=lastWorkingSummary(allWorkouts, exName, params.workSets||3);
+async function nextTargetFromList(workouts, params, exName){
+  const last=lastWorkingSummary(workouts, exName, params.workSets||3);
   if(!last) return null;
   const w = last.workSets[0].weightKg;
   const reps = last.workSets.map(s=>s.reps);
@@ -221,47 +268,58 @@ function buildPlan(targetWeight, params){
   return [...warm, ...work];
 }
 
-/* ==================== Renderers ==================== */
-function renderTable(){
-  const body = $('#sessionBody');
-  body.innerHTML='';
+/* ======= Renderers ======= */
+function renderHeader(target, params){
+  const exName = $('#exercise').value || '—';
+  $('#exerciseTitle').textContent = exName;
+  $('#targetBadge').textContent = target ? `Target: ${fmt(target)}kg × ${params.repsMin}-${params.repsMax}` : 'Target: —';
+  const total = currentPlan.length, done = currentSets.length;
+  const setsBadge = $('#setsBadge');
+  setsBadge.textContent = `Set: ${done}/${total}`;
+  setsBadge.className = 'badge ' + (done>=total ? 'ok' : '');
+  $('#dateBadge').textContent = `Datum: ${$('#date').value||todayISO()}`;
+  if(done>=total){ document.getElementById('leftCard').classList.add('glow'); }
+  else { document.getElementById('leftCard').classList.remove('glow'); }
+}
 
-  // Raderna visas som:
-  // 1) alla gjorda set (currentSets) överst
-  // 2) därefter kvarvarande plan (currentPlan.slice(done))
+function renderTable(){
+  const body = $('#sessionBody'); body.innerHTML='';
   const done = currentSets.length;
 
-  // Gjorda set
+  // gjorda set
   currentSets.forEach((s,i)=>{
-    const tr=document.createElement('tr');
+    const tr=document.createElement('tr'); tr.classList.add('added');
     tr.innerHTML = `
       <td>${fmt(s.weightKg)}kg</td>
       <td>${s.reps}</td>
-      <td><span class="ok">✓</span></td>
+      <td><span class="ok">✓ Klar</span></td>
       <td><button class="delbtn" data-i="${i}" title="Ta bort"><span class="icon">🗑︎</span></button></td>`;
     body.appendChild(tr);
   });
 
-  // Återstående plan visas i rött med "Förslag"
+  // plan i rött
   for(let i=done;i<currentPlan.length;i++){
     const p=currentPlan[i];
+    const isLastWork = p.type==='work' && i===currentPlan.length-1;
+    const note = isLastWork ? 'Sista – maxa' : 'Förslag';
     const tr=document.createElement('tr');
     tr.innerHTML = `
       <td class="warn">${fmt(p.weightKg)}kg</td>
       <td class="warn">${p.reps}</td>
-      <td class="warn">Förslag</td>
+      <td class="warn">${note}</td>
       <td class="ghostcell">—</td>`;
     body.appendChild(tr);
   }
 
-  // Aktivera delete
+  // delete handlers
   body.querySelectorAll('button[data-i]').forEach(b=>{
     b.onclick = async ()=>{
       const idx=+b.dataset.i;
       currentSets.splice(idx,1);
       renderTable();
       await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
-      updateSuggestAndHistory();
+      refreshRightSide(); // historik
+      renderHeader(sessionTargetCache[`${$('#exercise').value}|${$('#date').value||todayISO()}`], await getParamsFor($('#exercise').value));
     };
   });
 }
@@ -270,8 +328,8 @@ function renderHistory(all,ex){
   const list=$('#history'); list.innerHTML='';
   const filt=all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO)).slice(0,10);
   filt.forEach(w=>{
-    const div=document.createElement('div'); div.className='muted';
-    div.style.padding='6px 10px'; div.style.border='1px solid #253043'; div.style.borderRadius='10px'; div.style.background='#0b1220';
+    const div=document.createElement('div');
+    div.className='muted'; div.style.padding='6px 10px'; div.style.border='1px solid #253043'; div.style.borderRadius='10px'; div.style.background='#0b1220';
     div.textContent = `${w.dateISO} • ${w.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ')} • 1RM ${fmt(w.est1RM||0)}`;
     list.appendChild(div);
   });
@@ -282,24 +340,47 @@ function renderHistory(all,ex){
   $('#lastDateBox').textContent = `Senaste datum: ${last ? last.dateISO : '—'}`;
 }
 
-/* ==================== Suggest/Plan refresh ==================== */
-async function updateSuggestAndHistory(){
-  const exName = $('#exercise').value;
+/* ======= Target & Plan ======= */
+async function computeOrGetSessionTarget(exName, dateISO, params){
+  const key = `${exName}|${dateISO}`;
+  if (sessionTargetCache[key] != null) return sessionTargetCache[key];
+
   const allW = await idbAll();
-  const params = await getParamsFor(exName);
-
-  const currentTop = currentSets.length ? currentSets.reduce((a,b)=> a.weightKg>b.weightKg?a:b).weightKg : null;
-  const targetFromHist = await nextTargetWeight(allW, params, exName);
-  const target = (targetFromHist ?? currentTop ?? 60);
-
-  currentPlan = buildPlan(target, params);
-
-  // Render tabell och historik
-  renderTable();
-  renderHistory(allW, exName);
+  const past = allW.filter(w=>w.exercise===exName && w.dateISO < dateISO); // bara tidigare pass
+  let target = await nextTargetFromList(past, params, exName);
+  if(target == null){
+    target = currentSets.length ? Math.max(...currentSets.map(s=>s.weightKg)) : 60;
+  }
+  sessionTargetCache[key] = target;
+  return target;
 }
 
-/* ==================== Init & Events ==================== */
+async function refreshPlanOnly(){
+  const exName = $('#exercise').value;
+  const dateISO = $('#date').value || todayISO();
+  const params = await getParamsFor(exName);
+  const target = await computeOrGetSessionTarget(exName, dateISO, params);
+  currentPlan = buildPlan(target, params);
+  renderHeader(target, params);
+  renderTable();
+}
+
+async function refreshRightSide(){
+  const allW = await idbAll();
+  renderHistory(allW, $('#exercise').value);
+}
+
+/* ======= Humor ======= */
+const QUOTES=[
+  "Don’t panic. Only gravity is trying to kill your PR.",
+  "Today’s gravitational constant seems slightly higher.",
+  "Remember: towel your sweat, not your soul.",
+  "Muscle is just stubborn stardust. Convince it.",
+  "If in doubt, add 2.5 kg and optimism."
+];
+function setHumor(){ $('#humor').textContent = QUOTES[Math.floor(Math.random()*QUOTES.length)]; }
+
+/* ======= Init & events ======= */
 async function refreshExerciseDropdown(){
   const all = await exAll(); all.sort((a,b)=> a.name.localeCompare(b.name,'sv'));
   const sel=$('#exercise'); sel.innerHTML='';
@@ -310,7 +391,9 @@ async function loadTodayFor(exName){
   const dateISO=$('#date').value||todayISO();
   const exist=all.find(w=>w.dateISO===dateISO && w.exercise===exName);
   currentSets = exist ? exist.sets : [];
-  await updateSuggestAndHistory();
+  await refreshPlanOnly();
+  await refreshRightSide();
+  setHumor();
 }
 
 (async function init(){
@@ -321,12 +404,11 @@ async function loadTodayFor(exName){
   await loadTodayFor($('#exercise').value);
 })();
 
-$('#exercise').addEventListener('change', async ()=>{
-  await loadTodayFor($('#exercise').value);
-});
+$('#exercise').addEventListener('change', async ()=>{ await loadTodayFor($('#exercise').value); });
+$('#date').addEventListener('change', async ()=>{ await loadTodayFor($('#exercise').value); });
 
 $('#add').addEventListener('click', async ()=>{
-  // Om användaren lämnar fälten tomma – fyll med nästa plan
+  // Tomma fält → fyll automatiskt från nästa plan
   let w = parseNumber($('#weight').value);
   let r = parseNumber($('#reps').value);
   if((!w || !r) && currentPlan.length > currentSets.length){
@@ -340,10 +422,12 @@ $('#add').addEventListener('click', async ()=>{
   $('#weight').value=''; $('#reps').value='';
   renderTable();
   await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
-  updateSuggestAndHistory();
+  await refreshRightSide();
+  document.getElementById('leftCard').classList.add('glow');
+  setTimeout(()=>document.getElementById('leftCard').classList.remove('glow'),400);
 });
 
-/* ==================== Service worker ==================== */
+/* ======= Service worker ======= */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('./service-worker-v5.js'));
 }
