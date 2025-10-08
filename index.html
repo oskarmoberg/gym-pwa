@@ -16,6 +16,8 @@
     .row{display:flex;gap:8px;flex-wrap:wrap}
     .col{flex:1 1 220px}
     label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+
+    /* Inputs – anti-zoom och tydligt */
     select,input,button{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #243244;background:#000;color:var(--text);font-weight:700;font-size:16px}
     input::placeholder{color:#64748b}
     .btn{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;cursor:pointer}
@@ -24,34 +26,27 @@
     .muted{color:var(--muted);font-size:12px}
     .sp{height:8px}
 
-    /* Kompakt tabell */
+    /* Kompakt TABELL */
     table{width:100%;border-collapse:collapse;background:#0b1220;border-radius:10px;overflow:hidden;font-size:14px}
     th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left}
     th{background:#0f172a;font-weight:800}
     tr:last-child td{border-bottom:none}
     .ok{color:var(--ok);font-weight:800}
+    .note-warn{color:var(--warn);font-weight:800}
     .delbtn{width:auto;min-width:auto;padding:6px 10px;border-radius:8px;border:1px solid #334155;background:transparent;color:#e5e7eb;font-size:14px;line-height:1}
     .icon{font-size:16px}
+
     .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #253043;border-radius:999px;color:#cbd5e1;background:#0b1220;font-size:12px;white-space:nowrap}
-    .pill.ok{border-color:#1d3d2a;background:#0e2819}
-    .pill.warn{border-color:#4b1d1d;background:#211111}
 
-    /* Plan-list */
-    .plan{display:flex;flex-wrap:wrap;gap:6px}
-    .plan .pill small{opacity:.8}
-
-    /* Layoutgrid */
+    /* Layout */
     .grid{display:grid;grid-template-columns:1fr;gap:10px}
     @media(min-width:820px){.grid{grid-template-columns:1.1fr .9fr}}
-
-    /* Anti-zoom */
-    input,select,button{font-size:16px}
   </style>
 </head>
 <body>
 <div class="wrap">
   <div class="grid">
-    <!-- VÄNSTER: TABELL + INMATNING -->
+    <!-- VÄNSTER: PASS -->
     <section class="card">
       <h1 class="title">Aktivt pass</h1>
 
@@ -72,30 +67,24 @@
 
       <div class="sp"></div>
 
-      <!-- Plan för passet -->
-      <div class="muted" style="margin-bottom:6px">Dagens plan</div>
-      <div id="planList" class="plan"></div>
-
-      <div class="sp"></div>
-
-      <!-- TABELL FÖRST -->
+      <!-- TABELL (förslag först) -->
       <table>
         <thead>
           <tr>
             <th>Vikt</th>
             <th>Reps</th>
-            <th style="width:84px">Klar</th>
-            <th style="width:56px"></th>
+            <th style="width:80px">Klar</th>
+            <th style="width:60px"></th>
           </tr>
         </thead>
-        <tbody id="currentTbody"></tbody>
         <tbody>
           <tr id="suggestRow">
-            <td class="warn" id="sugWeight">–</td>
-            <td class="warn" id="sugReps">–</td>
-            <td colspan="2" class="warn" id="sugNote">Förslag</td>
+            <td class="note-warn" id="sugWeight">–</td>
+            <td class="note-warn" id="sugReps">–</td>
+            <td colspan="2" class="note-warn" id="sugNote">Förslag</td>
           </tr>
         </tbody>
+        <tbody id="currentTbody"></tbody>
       </table>
 
       <div class="sp"></div>
@@ -136,7 +125,7 @@
   </div>
 </div>
 
-<!-- Bottennav -->
+<!-- Bottenmeny -->
 <nav class="tabbar">
   <a href="index.html" data-tab="pass">Pass</a>
   <a href="exercises.html" data-tab="exercises">Övningar</a>
@@ -146,7 +135,7 @@
 <script src="nav.js"></script>
 
 <script>
-/* ==================== DATABASE ==================== */
+/* ========== IndexedDB setup ========== */
 const DB_NAME='gymlogger_db'; const STORE='workouts';
 let db;
 function idbOpen(){
@@ -175,11 +164,11 @@ async function idbUpsertByDateExercise(dateISO, exercise, sets){
   flashAutosaved();
 }
 
-/* = exercises helpers */
+/* ========== Exercise helpers ========== */
 function exAll(){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readonly');const st=tx.objectStore('exercises');const g=st.getAll();g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});}
 function exPut(ex){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore('exercises').put(ex);});}
 
-/* ==================== UTIL ==================== */
+/* ========== Utils ========== */
 const $=q=>document.querySelector(q);
 const fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
 const todayISO=()=>new Date().toISOString().slice(0,10);
@@ -192,11 +181,10 @@ function parseNumber(value){
   const n = Number(v); return Number.isFinite(n) ? n : 0;
 }
 
-/* ==================== STATE ==================== */
+/* ========== State ========== */
 let currentSets=[]; // {weightKg,reps,done}
-let currentPlan=[]; // planerade set för render
 
-/* ==================== DEFAULT EXERCISES (seed) ==================== */
+/* ========== Defaults (seed) ========== */
 async function seedExercisesIfEmpty(){
   const list = await exAll(); if(list.length) return;
   const defaults = [
@@ -210,26 +198,30 @@ async function seedExercisesIfEmpty(){
   for(const ex of defaults) await exPut(ex);
 }
 
-/* ==================== PARAMS & PLAN ==================== */
+/* ========== Suggestion logic (plan under huven) ========== */
 async function getParamsFor(name){
   const all = await exAll(); const ex = all.find(x=>x.name===name);
   return ex || { name, category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3 };
 }
 function lastWorkingSummary(all, exercise, workSets){
-  const sessions=all.filter(w=>w.exercise===exercise).sort((a,b)=>b.dateISO.localeCompare(a.dateISO)); if(!sessions.length) return null;
-  const sets=[...sessions[0].sets].sort((a,b)=>b.weightKg-a.weightKg).slice(0, workSets||3); if(!sets.length) return null;
+  const sessions=all.filter(w=>w.exercise===exercise).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
+  if(!sessions.length) return null;
+  const sets=[...sessions[0].sets].sort((a,b)=>b.weightKg-a.weightKg).slice(0, workSets||3);
+  if(!sets.length) return null;
   return { dateISO:sessions[0].dateISO, workSets: sets };
 }
-async function nextTargetWeightByParams(allWorkouts, params, exName){
-  const last=lastWorkingSummary(allWorkouts, exName, params.workSets||3); if(!last) return null;
-  const w = last.workSets[0].weightKg; const reps = last.workSets.map(s=>s.reps);
+async function nextTargetWeight(allWorkouts, params, exName){
+  const last=lastWorkingSummary(allWorkouts, exName, params.workSets||3);
+  if(!last) return null;
+  const w = last.workSets[0].weightKg;
+  const reps = last.workSets.map(s=>s.reps);
   const allHigh = reps.length>= (params.workSets||3) && reps.every(r=> r>= (params.repsMax||8));
   const anyLow  = reps.some(r=> r <= (params.repsMin||6)-1 );
   if(allHigh) return w + (params.bigInc||5);
   if(anyLow)  return Math.max(0, w - (params.inc||2.5));
   return w;
 }
-function plannedSetsForSessionByParams(targetWeight, params){
+function planFor(targetWeight, params){
   const warm = (params.warmups||[]).map(pct=>{
     const w = Math.round(targetWeight*(pct/100)/2.5)*2.5;
     const reps = pct>=85 ? 1 : (pct>=70 ? 3 : 5);
@@ -244,28 +236,27 @@ function plannedSetsForSessionByParams(targetWeight, params){
   return [...warm, ...work];
 }
 
-/* ==================== RENDERERS ==================== */
-function renderPlan(){
-  const box = document.getElementById('planList'); box.innerHTML='';
-  if(!currentPlan.length){ box.innerHTML='<span class="muted">Ingen plan</span>'; return; }
-  currentPlan.forEach((p,i)=>{
-    const done = i < currentSets.length;
-    const el=document.createElement('div');
-    el.className='pill '+(done?'ok':'');
-    const note = p.type==='work' && p.idx=== (currentPlan.filter(x=>x.type==='work').length) ? ' (sista)' : '';
-    el.innerHTML = `${fmt(p.weightKg)}kg × ${p.reps}<small>${p.type}${note}</small>`;
-    box.appendChild(el);
+/* ========== Rendering ========== */
+function renderCurrent(){
+  const tb=$('#currentTbody'); tb.innerHTML='';
+  currentSets.forEach((s,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${fmt(s.weightKg)}kg</td><td>${s.reps}</td>
+      <td><span class="ok">✓</span></td>
+      <td><button class="delbtn" title="Ta bort" data-i="${i}"><span class="icon">🗑︎</span></button></td>`;
+    tb.appendChild(tr);
   });
-  if(currentSets.length>=currentPlan.length){
-    const done=document.createElement('div'); done.className='pill ok'; done.textContent='Klart för idag ✅';
-    box.appendChild(done);
-  }else{
-    const left=document.createElement('div'); left.className='pill warn'; left.textContent=`Kvar: ${currentPlan.length-currentSets.length}`;
-    box.appendChild(left);
-  }
+  tb.querySelectorAll('button[data-i]').forEach(b=>{
+    b.onclick=async()=>{
+      const i=+b.dataset.i; currentSets.splice(i,1); renderCurrent();
+      await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
+      computeSuggestion();
+    };
+  });
 }
+
 function renderHistory(all,ex){
-  const list=document.getElementById('history'); list.innerHTML='';
+  const list=$('#history'); list.innerHTML='';
   const filt=all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO)).slice(0,10);
   filt.forEach(w=>{
     const div=document.createElement('div'); div.className='pill';
@@ -276,89 +267,75 @@ function renderHistory(all,ex){
   if(last){
     const topW=Math.max(...last.sets.map(s=>s.weightKg));
     const top=last.sets.find(s=>s.weightKg===topW) || last.sets[0];
-    document.getElementById('lastMax').textContent = `${fmt(top.weightKg)}kg × ${top.reps}`;
-    document.getElementById('lastDate').textContent = last.dateISO;
+    $('#lastMax').textContent = `${fmt(top.weightKg)}kg × ${top.reps}`;
+    $('#lastDate').textContent = last.dateISO;
   } else {
-    document.getElementById('lastMax').textContent='—'; document.getElementById('lastDate').textContent='—';
+    $('#lastMax').textContent='—'; $('#lastDate').textContent='—';
   }
 }
-function renderCurrent(){
-  const tb=document.getElementById('currentTbody'); tb.innerHTML='';
-  currentSets.forEach((s,i)=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML = `<td>${fmt(s.weightKg)}kg</td><td>${s.reps}</td>
-      <td><span class="ok">✓</span></td>
-      <td><button class="delbtn" title="Ta bort" data-i="${i}"><span class="icon">🗑︎</span></button></td>`;
-    tb.appendChild(tr);
-  });
-  tb.querySelectorAll('button[data-i]').forEach(b=>{
-    b.onclick=async()=>{ const i=+b.dataset.i; currentSets.splice(i,1); renderCurrent(); renderPlan();
-      await idbUpsertByDateExercise(document.getElementById('date').value||todayISO(), document.getElementById('exercise').value, currentSets);
-      computeSuggestion();
-    };
-  });
-}
 
-/* ==================== SUGGESTIONS & FLOW ==================== */
+/* ========== Suggestion row ========== */
 async function computeSuggestion(){
-  const exName = document.getElementById('exercise').value;
+  const exName = $('#exercise').value;
   const allW = await idbAll();
   const params = await getParamsFor(exName);
 
   const currentTop = currentSets.length ? currentSets.reduce((a,b)=> a.weightKg>b.weightKg?a:b).weightKg : null;
-  const targetFromHist = await nextTargetWeightByParams(allW, params, exName);
+  const targetFromHist = await nextTargetWeight(allW, params, exName);
   const target = (targetFromHist ?? currentTop ?? 60);
 
-  currentPlan = plannedSetsForSessionByParams(target, params);
-  renderPlan();
-
+  const sessionPlan = planFor(target, params);
   const done = currentSets.length;
-  const sugW = document.getElementById('sugWeight');
-  const sugR = document.getElementById('sugReps');
-  const sugN = document.getElementById('sugNote');
 
-  if(done >= currentPlan.length){
-    sugW.textContent='—'; sugR.textContent='—'; sugN.textContent='Klart för idag ✅'; return;
+  const sugW = $('#sugWeight'), sugR = $('#sugReps'), sugN = $('#sugNote');
+
+  if(done >= sessionPlan.length){
+    sugW.textContent='—'; sugR.textContent='—'; sugN.textContent='Klart för idag ✅';
+    return;
   }
-  const next = currentPlan[done];
+  const next = sessionPlan[done];
   sugW.textContent = `${fmt(next.weightKg)}kg`;
-  sugR.textContent   = `${next.reps}`;
-  sugN.textContent   = (next.type==='work' && next.idx===(currentPlan.filter(x=>x.type==='work').length)) ? 'Sista – maxa reps' : 'Förslag';
+  sugR.textContent = `${next.reps}`;
+  // Visa “Förslag” bara tills första setet lagts in
+  sugN.textContent = (done === 0) ? 'Förslag' : '';
 }
 
-/* ==================== INIT & EVENTS ==================== */
+/* ========== Init & Events ========== */
 async function refreshExerciseDropdown(sel){
   const all = await exAll(); all.sort((a,b)=> a.name.localeCompare(b.name,'sv'));
-  sel.innerHTML=''; for(const ex of all){ const o=document.createElement('option'); o.value=ex.name; o.textContent=ex.name; sel.appendChild(o); }
+  sel.innerHTML='';
+  for(const ex of all){ const o=document.createElement('option'); o.value=ex.name; o.textContent=ex.name; sel.appendChild(o); }
 }
 async function loadTodayFor(exName){
   const all=await idbAll();
-  const dateISO=document.getElementById('date').value||todayISO();
+  const dateISO=$('#date').value||todayISO();
   const exist=all.find(w=>w.dateISO===dateISO && w.exercise===exName);
   currentSets = exist ? exist.sets : [];
-  renderCurrent(); renderHistory(all, exName); await computeSuggestion();
+  renderCurrent(); renderHistory(all, exName); computeSuggestion();
 }
+
 (async function init(){
   await idbOpen(); await seedExercisesIfEmpty();
-  document.getElementById('date').value = todayISO();
-  await refreshExerciseDropdown(document.getElementById('exercise'));
-  if(!document.getElementById('exercise').value) document.getElementById('exercise').value='Marklyft';
-  await loadTodayFor(document.getElementById('exercise').value);
+  $('#date').value = todayISO();
+  await refreshExerciseDropdown($('#exercise'));
+  if(!$('#exercise').value) $('#exercise').value='Marklyft';
+  await loadTodayFor($('#exercise').value);
 })();
-document.getElementById('exercise').addEventListener('change', async ()=>{ await loadTodayFor(document.getElementById('exercise').value); });
 
-document.getElementById('add').addEventListener('click', async ()=>{
-  const w = parseNumber(document.getElementById('weight').value);
-  const r = parseNumber(document.getElementById('reps').value);
+$('#exercise').addEventListener('change', async ()=>{ await loadTodayFor($('#exercise').value); });
+
+$('#add').addEventListener('click', async ()=>{
+  const w = parseNumber($('#weight').value);
+  const r = parseNumber($('#reps').value);
   if(w<=0 || r<=0) return alert('Ange både vikt och reps.');
   currentSets.push({weightKg:w, reps:r, done:true});
-  document.getElementById('weight').value=''; document.getElementById('reps').value='';
-  renderCurrent(); renderPlan();
-  await idbUpsertByDateExercise(document.getElementById('date').value||todayISO(), document.getElementById('exercise').value, currentSets);
+  $('#weight').value=''; $('#reps').value='';
+  renderCurrent();
+  await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
   computeSuggestion();
 });
 
-/* ==================== SERVICE WORKER ==================== */
+/* ========== Service worker ========== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('./service-worker-v5.js'));
 }
