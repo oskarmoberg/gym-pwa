@@ -26,19 +26,18 @@
     .muted{color:var(--muted);font-size:12px}
     .sp{height:8px}
 
-    /* Kompakt TABELL */
+    /* TABELL */
     table{width:100%;border-collapse:collapse;background:#0b1220;border-radius:10px;overflow:hidden;font-size:14px}
     th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left}
     th{background:#0f172a;font-weight:800}
     tr:last-child td{border-bottom:none}
     .ok{color:var(--ok);font-weight:800}
-    .note-warn{color:var(--warn);font-weight:800}
+    .warn{color:var(--warn);font-weight:800}
     .delbtn{width:auto;min-width:auto;padding:6px 10px;border-radius:8px;border:1px solid #334155;background:transparent;color:#e5e7eb;font-size:14px;line-height:1}
     .icon{font-size:16px}
+    .ghostcell{opacity:.35}
 
-    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #253043;border-radius:999px;color:#cbd5e1;background:#0b1220;font-size:12px;white-space:nowrap}
-
-    /* Layout */
+    /* Layoutgrid */
     .grid{display:grid;grid-template-columns:1fr;gap:10px}
     @media(min-width:820px){.grid{grid-template-columns:1.1fr .9fr}}
   </style>
@@ -54,10 +53,7 @@
       <div class="row">
         <div class="col">
           <label>Övning</label>
-          <div class="row" style="gap:8px">
-            <select id="exercise" style="flex:1 1 auto"></select>
-            <a class="btn ghost" href="exercises.html" style="flex:0 0 auto;min-width:124px;text-align:center">Övningar →</a>
-          </div>
+          <select id="exercise"></select>
         </div>
         <div class="col">
           <label>Datum</label>
@@ -67,24 +63,17 @@
 
       <div class="sp"></div>
 
-      <!-- TABELL (förslag först) -->
+      <!-- TABELL: Plan (rött) + Gjorda (grönt) i samma lista -->
       <table>
         <thead>
           <tr>
             <th>Vikt</th>
             <th>Reps</th>
-            <th style="width:80px">Klar</th>
-            <th style="width:60px"></th>
+            <th style="width:100px">Klar</th>
+            <th style="width:64px"></th>
           </tr>
         </thead>
-        <tbody>
-          <tr id="suggestRow">
-            <td class="note-warn" id="sugWeight">–</td>
-            <td class="note-warn" id="sugReps">–</td>
-            <td colspan="2" class="note-warn" id="sugNote">Förslag</td>
-          </tr>
-        </tbody>
-        <tbody id="currentTbody"></tbody>
+        <tbody id="sessionBody"></tbody>
       </table>
 
       <div class="sp"></div>
@@ -106,12 +95,9 @@
 
       <div class="sp"></div>
       <div class="row">
-        <div class="col pill">Senaste max: <span id="lastMax">—</span></div>
-        <div class="col pill">Senaste datum: <span id="lastDate">—</span></div>
+        <div class="col"><div class="muted" id="lastMaxBox">Senaste max: —</div></div>
+        <div class="col"><div class="muted" id="lastDateBox">Senaste datum: —</div></div>
       </div>
-
-      <div class="sp"></div>
-      <div class="pill" id="autosaveStatus">Autosparat</div>
     </section>
 
     <!-- HÖGER: HISTORIK -->
@@ -135,45 +121,43 @@
 <script src="nav.js"></script>
 
 <script>
-/* ========== IndexedDB setup ========== */
-const DB_NAME='gymlogger_db'; const STORE='workouts';
+/* ==================== IndexedDB ==================== */
+const DB_NAME='gymlogger_db';
 let db;
 function idbOpen(){
   return new Promise((res,rej)=>{
     const r = indexedDB.open(DB_NAME, 2);
     r.onupgradeneeded = e=>{
-      const d = e.target.result;
+      const d=e.target.result;
       d.objectStoreNames.contains('workouts')||d.createObjectStore('workouts',{keyPath:'id',autoIncrement:true});
       d.objectStoreNames.contains('exercises')||d.createObjectStore('exercises',{keyPath:'name'});
     };
     r.onsuccess=()=>{db=r.result;res()}; r.onerror=()=>rej(r.error);
   });
 }
-function idbAdd(workout){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore(STORE).add(workout);});}
-function idbAll(){return new Promise((res,rej)=>{const tx=db.transaction(STORE,'readonly');const st=tx.objectStore(STORE);const g=st.getAll();g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});}
+function idbAll(){return new Promise((res,rej)=>{const tx=db.transaction('workouts','readonly');const st=tx.objectStore('workouts');const g=st.getAll();g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});}
+function idbAdd(workout){return new Promise((res,rej)=>{const tx=db.transaction('workouts','readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore('workouts').add(workout);});}
 async function idbUpsertByDateExercise(dateISO, exercise, sets){
   const all=await idbAll();
   const found=all.find(w=>w.dateISO===dateISO && w.exercise===exercise);
   const est1RM = sets.length ? Math.max(...sets.map(s=>epley(s.weightKg,s.reps))) : 0;
   if(found){
-    await new Promise((res,rej)=>{const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(found.id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
+    await new Promise((res,rej)=>{const tx=db.transaction('workouts','readwrite');tx.objectStore('workouts').delete(found.id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
     await idbAdd({ id:found.id, dateISO, exercise, sets, est1RM, notes: found.notes||'' });
   } else {
     await idbAdd({ dateISO, exercise, sets, est1RM, notes:'' });
   }
-  flashAutosaved();
 }
 
-/* ========== Exercise helpers ========== */
+/* ==================== Övningar ==================== */
 function exAll(){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readonly');const st=tx.objectStore('exercises');const g=st.getAll();g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});}
 function exPut(ex){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore('exercises').put(ex);});}
 
-/* ========== Utils ========== */
+/* ==================== Util ==================== */
 const $=q=>document.querySelector(q);
 const fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const epley=(w,r)=> r>1 ? w*(1+r/30) : w;
-function flashAutosaved(){ const el=$('#autosaveStatus'); el.textContent='Autosparat ✅'; setTimeout(()=>el.textContent='Autosparat',900); }
 function parseNumber(value){
   if (value == null) return 0;
   let v = String(value).trim().replace(/\s+/g,'');
@@ -181,10 +165,11 @@ function parseNumber(value){
   const n = Number(v); return Number.isFinite(n) ? n : 0;
 }
 
-/* ========== State ========== */
-let currentSets=[]; // {weightKg,reps,done}
+/* ==================== State ==================== */
+let currentSets=[]; // {weightKg,reps}
+let currentPlan=[]; // [{weightKg,reps,type,idx}] computed
 
-/* ========== Defaults (seed) ========== */
+/* ==================== Seed defaults ==================== */
 async function seedExercisesIfEmpty(){
   const list = await exAll(); if(list.length) return;
   const defaults = [
@@ -198,7 +183,7 @@ async function seedExercisesIfEmpty(){
   for(const ex of defaults) await exPut(ex);
 }
 
-/* ========== Suggestion logic (plan under huven) ========== */
+/* ==================== Planlogik ==================== */
 async function getParamsFor(name){
   const all = await exAll(); const ex = all.find(x=>x.name===name);
   return ex || { name, category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3 };
@@ -221,7 +206,7 @@ async function nextTargetWeight(allWorkouts, params, exName){
   if(anyLow)  return Math.max(0, w - (params.inc||2.5));
   return w;
 }
-function planFor(targetWeight, params){
+function buildPlan(targetWeight, params){
   const warm = (params.warmups||[]).map(pct=>{
     const w = Math.round(targetWeight*(pct/100)/2.5)*2.5;
     const reps = pct>=85 ? 1 : (pct>=70 ? 3 : 5);
@@ -236,21 +221,47 @@ function planFor(targetWeight, params){
   return [...warm, ...work];
 }
 
-/* ========== Rendering ========== */
-function renderCurrent(){
-  const tb=$('#currentTbody'); tb.innerHTML='';
+/* ==================== Renderers ==================== */
+function renderTable(){
+  const body = $('#sessionBody');
+  body.innerHTML='';
+
+  // Raderna visas som:
+  // 1) alla gjorda set (currentSets) överst
+  // 2) därefter kvarvarande plan (currentPlan.slice(done))
+  const done = currentSets.length;
+
+  // Gjorda set
   currentSets.forEach((s,i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML = `<td>${fmt(s.weightKg)}kg</td><td>${s.reps}</td>
+    tr.innerHTML = `
+      <td>${fmt(s.weightKg)}kg</td>
+      <td>${s.reps}</td>
       <td><span class="ok">✓</span></td>
-      <td><button class="delbtn" title="Ta bort" data-i="${i}"><span class="icon">🗑︎</span></button></td>`;
-    tb.appendChild(tr);
+      <td><button class="delbtn" data-i="${i}" title="Ta bort"><span class="icon">🗑︎</span></button></td>`;
+    body.appendChild(tr);
   });
-  tb.querySelectorAll('button[data-i]').forEach(b=>{
-    b.onclick=async()=>{
-      const i=+b.dataset.i; currentSets.splice(i,1); renderCurrent();
+
+  // Återstående plan visas i rött med "Förslag"
+  for(let i=done;i<currentPlan.length;i++){
+    const p=currentPlan[i];
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td class="warn">${fmt(p.weightKg)}kg</td>
+      <td class="warn">${p.reps}</td>
+      <td class="warn">Förslag</td>
+      <td class="ghostcell">—</td>`;
+    body.appendChild(tr);
+  }
+
+  // Aktivera delete
+  body.querySelectorAll('button[data-i]').forEach(b=>{
+    b.onclick = async ()=>{
+      const idx=+b.dataset.i;
+      currentSets.splice(idx,1);
+      renderTable();
       await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
-      computeSuggestion();
+      updateSuggestAndHistory();
     };
   });
 }
@@ -259,23 +270,20 @@ function renderHistory(all,ex){
   const list=$('#history'); list.innerHTML='';
   const filt=all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO)).slice(0,10);
   filt.forEach(w=>{
-    const div=document.createElement('div'); div.className='pill';
+    const div=document.createElement('div'); div.className='muted';
+    div.style.padding='6px 10px'; div.style.border='1px solid #253043'; div.style.borderRadius='10px'; div.style.background='#0b1220';
     div.textContent = `${w.dateISO} • ${w.sets.map(s=>`${fmt(s.weightKg)}×${s.reps}`).join(' · ')} • 1RM ${fmt(w.est1RM||0)}`;
     list.appendChild(div);
   });
   const last=filt[0];
-  if(last){
-    const topW=Math.max(...last.sets.map(s=>s.weightKg));
-    const top=last.sets.find(s=>s.weightKg===topW) || last.sets[0];
-    $('#lastMax').textContent = `${fmt(top.weightKg)}kg × ${top.reps}`;
-    $('#lastDate').textContent = last.dateISO;
-  } else {
-    $('#lastMax').textContent='—'; $('#lastDate').textContent='—';
-  }
+  $('#lastMaxBox').textContent = last
+    ? `Senaste max: ${fmt(Math.max(...last.sets.map(s=>s.weightKg)))}kg × ${last.sets.sort((a,b)=>b.weightKg-a.weightKg)[0].reps}`
+    : 'Senaste max: —';
+  $('#lastDateBox').textContent = `Senaste datum: ${last ? last.dateISO : '—'}`;
 }
 
-/* ========== Suggestion row ========== */
-async function computeSuggestion(){
+/* ==================== Suggest/Plan refresh ==================== */
+async function updateSuggestAndHistory(){
   const exName = $('#exercise').value;
   const allW = await idbAll();
   const params = await getParamsFor(exName);
@@ -284,26 +292,17 @@ async function computeSuggestion(){
   const targetFromHist = await nextTargetWeight(allW, params, exName);
   const target = (targetFromHist ?? currentTop ?? 60);
 
-  const sessionPlan = planFor(target, params);
-  const done = currentSets.length;
+  currentPlan = buildPlan(target, params);
 
-  const sugW = $('#sugWeight'), sugR = $('#sugReps'), sugN = $('#sugNote');
-
-  if(done >= sessionPlan.length){
-    sugW.textContent='—'; sugR.textContent='—'; sugN.textContent='Klart för idag ✅';
-    return;
-  }
-  const next = sessionPlan[done];
-  sugW.textContent = `${fmt(next.weightKg)}kg`;
-  sugR.textContent = `${next.reps}`;
-  // Visa “Förslag” bara tills första setet lagts in
-  sugN.textContent = (done === 0) ? 'Förslag' : '';
+  // Render tabell och historik
+  renderTable();
+  renderHistory(allW, exName);
 }
 
-/* ========== Init & Events ========== */
-async function refreshExerciseDropdown(sel){
+/* ==================== Init & Events ==================== */
+async function refreshExerciseDropdown(){
   const all = await exAll(); all.sort((a,b)=> a.name.localeCompare(b.name,'sv'));
-  sel.innerHTML='';
+  const sel=$('#exercise'); sel.innerHTML='';
   for(const ex of all){ const o=document.createElement('option'); o.value=ex.name; o.textContent=ex.name; sel.appendChild(o); }
 }
 async function loadTodayFor(exName){
@@ -311,31 +310,40 @@ async function loadTodayFor(exName){
   const dateISO=$('#date').value||todayISO();
   const exist=all.find(w=>w.dateISO===dateISO && w.exercise===exName);
   currentSets = exist ? exist.sets : [];
-  renderCurrent(); renderHistory(all, exName); computeSuggestion();
+  await updateSuggestAndHistory();
 }
 
 (async function init(){
   await idbOpen(); await seedExercisesIfEmpty();
   $('#date').value = todayISO();
-  await refreshExerciseDropdown($('#exercise'));
+  await refreshExerciseDropdown();
   if(!$('#exercise').value) $('#exercise').value='Marklyft';
   await loadTodayFor($('#exercise').value);
 })();
 
-$('#exercise').addEventListener('change', async ()=>{ await loadTodayFor($('#exercise').value); });
-
-$('#add').addEventListener('click', async ()=>{
-  const w = parseNumber($('#weight').value);
-  const r = parseNumber($('#reps').value);
-  if(w<=0 || r<=0) return alert('Ange både vikt och reps.');
-  currentSets.push({weightKg:w, reps:r, done:true});
-  $('#weight').value=''; $('#reps').value='';
-  renderCurrent();
-  await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
-  computeSuggestion();
+$('#exercise').addEventListener('change', async ()=>{
+  await loadTodayFor($('#exercise').value);
 });
 
-/* ========== Service worker ========== */
+$('#add').addEventListener('click', async ()=>{
+  // Om användaren lämnar fälten tomma – fyll med nästa plan
+  let w = parseNumber($('#weight').value);
+  let r = parseNumber($('#reps').value);
+  if((!w || !r) && currentPlan.length > currentSets.length){
+    const next = currentPlan[currentSets.length];
+    if(!w) w = next.weightKg;
+    if(!r) r = parseNumber(String(next.reps).replace(/[^\d.,]/g,'')) || (typeof next.reps==='string' ? 5 : next.reps);
+  }
+  if(w<=0 || r<=0) return alert('Ange både vikt och reps (eller lämna tomt för att använda förslaget).');
+
+  currentSets.push({weightKg:w, reps:r});
+  $('#weight').value=''; $('#reps').value='';
+  renderTable();
+  await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
+  updateSuggestAndHistory();
+});
+
+/* ==================== Service worker ==================== */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('./service-worker-v5.js'));
 }
