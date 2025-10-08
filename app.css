@@ -1,0 +1,24 @@
+/* ===== Bottenmeny (tab bar) som funkar på mobil ===== */
+:root { --tab-bg:#0d1322; --tab-border:#1f2937; --tab-text:#cbd5e1; --tab-active:#22c55e; }
+body { padding-bottom: 72px; } /* plats så menyn inte täcker innehåll */
+
+.tabbar{
+  position: fixed; left:0; right:0; bottom:0;
+  background: var(--tab-bg);
+  border-top: 1px solid var(--tab-border);
+  display: flex; justify-content: space-around; gap: 6px;
+  padding: 8px 10px; z-index: 9999;
+}
+.tabbar a{
+  flex:1 1 0; text-align:center; text-decoration:none;
+  color: var(--tab-text);
+  padding: 8px 6px; border-radius: 12px; border:1px solid transparent;
+  font-size: 14px; font-weight: 700;
+}
+.tabbar a.active{
+  border-color: #334155;
+  color: #e5e7eb;
+  background: linear-gradient(180deg,#23c55e,#16a34a);
+}
+.tabbar a span{ display:block; font-size:12px; opacity:.9 }
+@media (min-width:820px){ .tabbar a{ max-width: 180px; margin: 0 6px; } }
