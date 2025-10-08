@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport"
-  content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+        content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
   <title>Gym Logger — Pass</title>
   <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="app.css" />
   <meta name="theme-color" content="#111827" />
   <style>
     :root { --bg:#0b1220; --card:#0d1322; --muted:#94a3b8; --text:#e5e7eb; --ok:#22c55e; --warn:#ef4444; --border:#1f2937; }
@@ -16,17 +17,12 @@
     .row{display:flex;gap:10px;flex-wrap:wrap}
     .col{flex:1 1 240px}
     label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
-    select, input, button {
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid #243244;
-  background: #000;
-  color: var(--text);
-  font-weight: 700;
-  font-size: 16px; /* ← stoppar iPhone från att zooma in */
-}
-
+    /* Anti-zoom + inputs-stil */
+    select, input, button{
+      width:100%; padding:12px 14px; border-radius:12px;
+      border:1px solid #243244; background:#000; color:var(--text);
+      font-weight:700; font-size:16px;
+    }
     input::placeholder{color:#64748b}
     .btn{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;cursor:pointer}
     .btn.ghost{background:transparent;border:1px solid #334155;font-weight:600}
@@ -43,7 +39,7 @@
     .footer{display:flex;gap:10px;flex-wrap:wrap}
     .grid{display:grid;grid-template-columns:1fr;gap:12px}
     @media(min-width:820px){.grid{grid-template-columns:1.2fr .8fr}}
-    /* Modal */
+    /* Modal (behålls i Sprint 1, flyttas i Sprint 2) */
     #exModal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:12px}
     #exModal .box{background:#0d1322;border:1px solid var(--border);border-radius:16px;padding:16px;width:min(720px,95vw)}
   </style>
@@ -61,7 +57,7 @@
           <label>Övning</label>
           <div class="row" style="gap:8px">
             <select id="exercise" style="flex:1 1 auto"></select>
-            <button id="manageExercises" class="btn ghost" style="flex:0 0 auto;min-width:160px">Hantera övningar</button>
+            <a class="btn ghost" href="exercises.html" style="flex:0 0 auto;min-width:160px;text-align:center">Övningar →</a>
           </div>
         </div>
         <div class="col">
@@ -76,11 +72,11 @@
       <div class="row">
         <div class="col">
           <label>Vikt (kg)</label>
-          <input id="weight" inputmode="decimal" placeholder="t.ex. 140">
+          <input id="weight" inputmode="decimal" pattern="[0-9.,]*" autocomplete="off" autocapitalize="off" placeholder="t.ex. 140">
         </div>
         <div class="col">
           <label>Reps</label>
-          <input id="reps" inputmode="numeric" placeholder="t.ex. 5">
+          <input id="reps" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="off" placeholder="t.ex. 5">
         </div>
         <div class="col" style="align-self:end">
           <button id="add" class="btn">Addera</button>
@@ -92,19 +88,15 @@
       <!-- Tabell -->
       <table>
         <thead>
-          <tr>
-            <th>Vikt</th>
-            <th>Reps</th>
-            <th>Färdigt?</th>
-          </tr>
+        <tr><th>Vikt</th><th>Reps</th><th>Färdigt?</th></tr>
         </thead>
         <tbody id="currentTbody"></tbody>
         <tbody>
-          <tr id="suggestRow">
-            <td class="warn" id="sugWeight">–</td>
-            <td class="warn" id="sugReps">–</td>
-            <td class="warn" id="sugNote">Förslag</td>
-          </tr>
+        <tr id="suggestRow">
+          <td class="warn" id="sugWeight">–</td>
+          <td class="warn" id="sugReps">–</td>
+          <td class="warn" id="sugNote">Förslag</td>
+        </tr>
         </tbody>
       </table>
 
@@ -118,64 +110,29 @@
       <div class="pill" id="autosaveStatus">Autosparat</div>
     </section>
 
-    <!-- HÖGER: HISTORIK -->
+    <!-- HÖGER: HISTORIK (Export flyttas i Sprint 2 men får ligga kvar här tills dess) -->
     <section class="card">
       <h2 class="title">Historik</h2>
       <div class="muted">Senaste 10 för vald övning:</div>
       <div id="history" style="margin-top:8px;display:grid;gap:8px"></div>
       <div class="sp"></div>
       <div class="footer">
-        <button class="btn ghost" id="exportJSON">Export JSON</button>
-        <button class="btn ghost" id="exportCSV">Export CSV</button>
+        <a class="btn ghost" href="export.html">Export →</a>
       </div>
     </section>
   </div>
 </div>
 
-<!-- MODAL: Hantera övningar -->
-<div id="exModal">
-  <div class="box">
-    <h3 style="margin:0 0 8px">Övning</h3>
-    <div class="row">
-      <div class="col">
-        <label>Namn</label>
-        <input id="exName" placeholder="t.ex. Bicepscurl">
-      </div>
-      <div class="col">
-        <label>Kategori</label>
-        <select id="exCategory">
-          <option value="base">Baslyft</option>
-          <option value="hybrid">Press/drag</option>
-          <option value="iso">Isolation</option>
-        </select>
-      </div>
-    </div>
-    <div class="sp"></div>
-    <div class="row">
-      <div class="col"><label>Arbetset</label><input id="exWorkSets" inputmode="numeric" value="3"></div>
-      <div class="col"><label>Reps (min–max)</label><input id="exRepsRange" placeholder="6-8" value="6-8"></div>
-      <div class="col"><label>Warmups (%)</label><input id="exWarmups" placeholder="50,70,85" value="50,70,85"></div>
-    </div>
-    <div class="sp"></div>
-    <div class="row">
-      <div class="col"><label>Ökningssteg (kg)</label><input id="exInc" inputmode="decimal" value="2.5"></div>
-      <div class="col"><label>Stor ökning (kg)</label><input id="exBigInc" inputmode="decimal" value="5"></div>
-      <div class="col"><label>Frekvens (dagar)</label><input id="exFreqDays" inputmode="numeric" value="4"></div>
-    </div>
-    <div class="sp"></div>
-    <div class="row">
-      <div class="col"><button id="exSave" class="btn">Spara övning</button></div>
-      <div class="col"><button id="exClose" class="btn ghost">Stäng</button></div>
-    </div>
-    <div class="sp"></div>
-    <div class="muted">Tips: Isolation → 3–4 set, 10–15 reps, warmups kan vara tomt eller 40.</div>
-  </div>
-</div>
+<!-- ===== Bottenmeny (Sprint 1) ===== -->
+<nav class="tabbar">
+  <a href="index.html" data-tab="pass">Pass</a>
+  <a href="exercises.html" data-tab="exercises">Övningar</a>
+  <a href="export.html" data-tab="export">Export</a>
+  <a href="dashboard.html" data-tab="dashboard">Mer</a>
+</nav>
+<script src="nav.js"></script>
 
 <script>
-/* ==================== KONFIG ==================== */
-const SITE_URL = 'https://oskamoberg.github.io/gym-pwa/';
-
 /* ==================== DB ==================== */
 const DB_NAME='gymlogger_db'; const STORE='workouts';
 let db;
@@ -188,7 +145,7 @@ function idbOpen(){
         d.createObjectStore(STORE, { keyPath:'id', autoIncrement:true });
       }
       if(!d.objectStoreNames.contains('exercises')){
-        d.createObjectStore('exercises', { keyPath:'name' }); // unik på namn
+        d.createObjectStore('exercises', { keyPath:'name' });
       }
     };
     r.onsuccess=()=>{ db=r.result; res(); };
@@ -235,9 +192,18 @@ const fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const epley=(w,r)=> r>1 ? w*(1+r/30) : w;
 function flashAutosaved(){ const el=$('#autosaveStatus'); el.textContent='Autosparat ✅'; setTimeout(()=>el.textContent='Autosparat',1000); }
+// Tillåt både "140,5" och "140.5" (och tar bort tusenkomma)
+function parseNumber(value){
+  if (value == null) return 0;
+  let v = String(value).trim().replace(/\s+/g,'');
+  if (v.includes('.') && v.includes(',')) v = v.replace(/,/g,''); // kommatecken som tusental
+  else v = v.replace(',', '.'); // svensk decimal
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
 
 /* ==================== STATE ==================== */
-let currentSets=[]; // {weightKg,reps,done}
+let currentSets=[];
 
 /* ==================== SEED DEFAULT EXERCISES ==================== */
 async function seedExercisesIfEmpty(){
@@ -254,12 +220,11 @@ async function seedExercisesIfEmpty(){
   for(const ex of defaults) await exPut(ex);
 }
 
-/* ==================== EXERCISE PARAM FETCH ==================== */
+/* ==================== EXERCISE PARAMS ==================== */
 async function getParamsFor(name){
   const all = await exAll();
   const ex = all.find(x=>x.name===name);
   if(ex) return ex;
-  // fallback
   return { name, category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3 };
 }
 async function refreshExerciseDropdown(sel){
@@ -395,7 +360,8 @@ $('#exercise').addEventListener('change', async ()=>{
 });
 
 $('#add').addEventListener('click', async ()=>{
-  const w = +($('#weight').value||0); const r = +($('#reps').value||0);
+  const w = parseNumber($('#weight').value);
+  const r = parseNumber($('#reps').value);
   if(w<=0 || r<=0) return alert('Ange både vikt och reps.');
   currentSets.push({weightKg:w, reps:r, done:true});
   $('#weight').value=''; $('#reps').value='';
@@ -404,65 +370,9 @@ $('#add').addEventListener('click', async ()=>{
   computeSuggestion();
 });
 
-$('#exportJSON').addEventListener('click', async ()=>{
-  const all = await idbAll();
-  const txt = JSON.stringify(all,null,2);
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
-  a.download=`workouts_${todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href);
-});
-$('#exportCSV').addEventListener('click', async ()=>{
-  const all = await idbAll();
-  const rows=[['dateISO','exercise','setIndex','weightKg','reps','est1RM']];
-  all.forEach(w=> w.sets.forEach((s,i)=> rows.push([w.dateISO,w.exercise,i+1,s.weightKg,s.reps,(w.est1RM||0).toFixed(1)])));
-  const csv = rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download=`workouts_${todayISO()}.csv`; a.click(); URL.revokeObjectURL(a.href);
-});
-
-/* ====== Hantera övningar (modal) ====== */
-$('#manageExercises').onclick = async ()=>{
-  const exSel = $('#exercise').value || '';
-  const all = await exAll();
-  const curr = all.find(x=>x.name===exSel);
-  $('#exName').value = curr?.name || '';
-  $('#exCategory').value = curr?.category || 'hybrid';
-  $('#exWorkSets').value = curr?.workSets ?? 3;
-  $('#exRepsRange').value = curr ? `${curr.repsMin}-${curr.repsMax}` : '6-8';
-  $('#exWarmups').value = curr?.warmups?.join(',') || '40,60,80';
-  $('#exInc').value = curr?.inc ?? 2.5;
-  $('#exBigInc').value = curr?.bigInc ?? 5;
-  $('#exFreqDays').value = curr?.freqDays ?? 3;
-  $('#exModal').style.display='flex';
-};
-$('#exClose').onclick = ()=> $('#exModal').style.display='none';
-$('#exSave').onclick = async ()=>{
-  const name = $('#exName').value.trim();
-  if(!name) return alert('Ange namn.');
-  const [minS,maxS] = ($('#exRepsRange').value||'6-8').split('-').map(x=>+x);
-  const warmups = ($('#exWarmups').value||'').split(',').map(x=>+x).filter(x=>x>0);
-  const ex = {
-    name,
-    category: $('#exCategory').value,
-    workSets: +$('#exWorkSets').value || 3,
-    repsMin: +minS || 6,
-    repsMax: +maxS || 8,
-    warmups: warmups,
-    inc: +$('#exInc').value || 2.5,
-    bigInc: +$('#exBigInc').value || 5,
-    freqDays: +$('#exFreqDays').value || 3
-  };
-  await exPut(ex);
-  await refreshExerciseDropdown($('#exercise'));
-  $('#exercise').value = name;
-  $('#exModal').style.display='none';
-  await loadTodayFor(name);
-};
-
 /* ==================== SERVICE WORKER ==================== */
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=> navigator.serviceWorker.register('./service-worker-v3.js'));
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('./service-worker-v5.js'));
 }
 </script>
 </body>
