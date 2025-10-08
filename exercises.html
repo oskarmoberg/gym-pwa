@@ -7,18 +7,78 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="app.css" />
   <style>
-    body{background:#0b1220;color:#e5e7eb;font-family:ui-sans-serif,system-ui,-apple-system,Inter,Roboto}
+    :root { --bg:#0b1220; --card:#0d1322; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937; }
+    *{box-sizing:border-box;font-family:ui-sans-serif,system-ui,-apple-system,Inter,Roboto}
+    body{margin:0;background:var(--bg);color:var(--text)}
     .wrap{max-width:960px;margin:0 auto;padding:16px}
-    .card{background:#0d1322;border:1px solid #1f2937;border-radius:16px;padding:14px}
-    h1{margin:0 0 10px}
+    .card{background:#0d1322;border:1px solid var(--border);border-radius:16px;padding:14px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .col{flex:1 1 240px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    select,input,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #243244;background:#000;color:#e5e7eb;font-weight:700;font-size:16px}
+    .title{font-size:22px;font-weight:800;margin:0 0 10px}
+    .list{display:grid;gap:8px;margin-top:8px}
+    .pill{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 10px;border:1px solid #253043;border-radius:12px;background:#0b1220}
+    .pill b{font-size:14px}
+    .muted{color:#94a3b8;font-size:12px}
+    .sp{height:10px}
+    .btn{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid #334155;font-weight:600}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Övningar</h1>
-      <p>Här kommer du kunna lägga till/ändra övningar (kategori, reps, warmups, progression).</p>
-      <p><em>Kommer i Sprint 2.</em></p>
+      <h1 class="title">Övningar</h1>
+      <div class="row">
+        <div class="col">
+          <label>Välj övning</label>
+          <select id="list"></select>
+        </div>
+        <div class="col" style="align-self:end">
+          <button id="newEx" class="btn ghost">Ny övning</button>
+        </div>
+        <div class="col" style="align-self:end">
+          <button id="deleteEx" class="btn ghost">Ta bort</button>
+        </div>
+      </div>
+
+      <div class="sp"></div>
+      <div class="row">
+        <div class="col"><label>Namn</label><input id="exName" placeholder="t.ex. Bicepscurl"></div>
+        <div class="col"><label>Kategori</label>
+          <select id="exCategory">
+            <option value="base">Baslyft</option>
+            <option value="hybrid">Press/drag</option>
+            <option value="iso">Isolation</option>
+          </select>
+        </div>
+        <div class="col"><label>Arbetset</label><input id="exWorkSets" inputmode="numeric" value="3"></div>
+      </div>
+
+      <div class="sp"></div>
+      <div class="row">
+        <div class="col"><label>Reps (min–max)</label><input id="exRepsRange" placeholder="6-8" value="6-8"></div>
+        <div class="col"><label>Warmups (%)</label><input id="exWarmups" placeholder="50,70,85" value="50,70,85"></div>
+        <div class="col"><label>Frekvens (dagar)</label><input id="exFreqDays" inputmode="numeric" value="4"></div>
+      </div>
+
+      <div class="sp"></div>
+      <div class="row">
+        <div class="col"><label>Ökningssteg (kg)</label><input id="exInc" inputmode="decimal" value="2.5"></div>
+        <div class="col"><label>Stor ökning (kg)</label><input id="exBigInc" inputmode="decimal" value="5"></div>
+        <div class="col" style="align-self:end"><button id="saveEx" class="btn">Spara</button></div>
+      </div>
+
+      <div class="sp"></div>
+      <div class="muted">Tips: Isolation → 3–4 set, 10–15 reps, warmups kan vara tomt eller 40.</div>
+    </div>
+
+    <div class="sp"></div>
+
+    <div class="card">
+      <h2 class="title">Alla övningar</h2>
+      <div id="all" class="list"></div>
     </div>
   </div>
 
@@ -29,5 +89,122 @@
     <a href="dashboard.html" data-tab="dashboard">Mer</a>
   </nav>
   <script src="nav.js"></script>
+
+  <script>
+  // ======= DB helpers (samma som i index) =======
+  const DB_NAME='gymlogger_db';
+  let db;
+  function idbOpen(){
+    return new Promise((res,rej)=>{
+      const r = indexedDB.open(DB_NAME, 2);
+      r.onupgradeneeded = e=>{
+        const d = e.target.result;
+        d.objectStoreNames.contains('workouts') || d.createObjectStore('workouts',{keyPath:'id',autoIncrement:true});
+        d.objectStoreNames.contains('exercises') || d.createObjectStore('exercises',{keyPath:'name'});
+      };
+      r.onsuccess=()=>{db=r.result;res()}; r.onerror=()=>rej(r.error);
+    });
+  }
+  function exAll(){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readonly');const st=tx.objectStore('exercises');const g=st.getAll();g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});}
+  function exPut(ex){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore('exercises').put(ex);});}
+  function exDelete(name){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore('exercises').delete(name);});}
+
+  // ======= UI helpers =======
+  const $=q=>document.querySelector(q);
+  function parseRange(v){const [a,b]=(v||'6-8').split('-').map(x=>+x);return {min:+a||6,max:+b||8};}
+  function parseWarmups(v){return (v||'').split(',').map(x=>+x).filter(x=>x>0);}
+
+  async function refreshSelect(){
+    const list = await exAll();
+    list.sort((a,b)=>a.name.localeCompare(b.name,'sv'));
+    const sel = $('#list'); sel.innerHTML='';
+    for(const ex of list){ const o=document.createElement('option');o.value=ex.name;o.textContent=ex.name;sel.appendChild(o); }
+    if(list[0]) loadIntoForm(list[0]);
+    renderAll(list);
+  }
+
+  function loadIntoForm(ex){
+    $('#list').value = ex.name;
+    $('#exName').value = ex.name;
+    $('#exCategory').value = ex.category || 'hybrid';
+    $('#exWorkSets').value = ex.workSets ?? 3;
+    $('#exRepsRange').value = `${ex.repsMin}-${ex.repsMax}`;
+    $('#exWarmups').value = (ex.warmups||[]).join(',');
+    $('#exFreqDays').value = ex.freqDays ?? 3;
+    $('#exInc').value = ex.inc ?? 2.5;
+    $('#exBigInc').value = ex.bigInc ?? 5;
+  }
+
+  function currentFromForm(){
+    const {min,max} = parseRange($('#exRepsRange').value);
+    return {
+      name: ($('#exName').value||'').trim(),
+      category: $('#exCategory').value,
+      workSets: +($('#exWorkSets').value||3),
+      repsMin: +min, repsMax:+max,
+      warmups: parseWarmups($('#exWarmups').value),
+      inc: +($('#exInc').value||2.5),
+      bigInc: +($('#exBigInc').value||5),
+      freqDays: +($('#exFreqDays').value||3)
+    };
+  }
+
+  function renderAll(list){
+    const box = $('#all'); box.innerHTML='';
+    list.forEach(ex=>{
+      const div=document.createElement('div');div.className='pill';
+      div.innerHTML = `<b>${ex.name}</b><span class="muted">${ex.category} • ${ex.workSets} set • ${ex.repsMin}-${ex.repsMax} reps • warmups: ${(ex.warmups||[]).join(',')||'—'}</span>`;
+      div.onclick=()=>loadIntoForm(ex);
+      box.appendChild(div);
+    });
+  }
+
+  // ======= events =======
+  (async function init(){
+    await idbOpen();
+    const list = await exAll();
+    if(!list.length){
+      // seed standardövningar (samma som i index)
+      const defaults = [
+        { name:'Marklyft', category:'base', workSets:3, repsMin:3, repsMax:5, warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:5 },
+        { name:'Bänkpress', category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3 },
+        { name:'Knäböj', category:'base', workSets:3, repsMin:3, repsMax:5, warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:4 },
+        { name:'Militärpress', category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:4 },
+        { name:'Chins', category:'hybrid', workSets:3, repsMin:6, repsMax:10, warmups:[40,60], inc:2.5, bigInc:5, freqDays:3 },
+        { name:'Bicepscurl', category:'iso', workSets:3, repsMin:10, repsMax:15, warmups:[40], inc:2.5, bigInc:5, freqDays:2 }
+      ];
+      for(const ex of defaults) await exPut(ex);
+    }
+    await refreshSelect();
+  })();
+
+  $('#list').addEventListener('change', async ()=>{
+    const all=await exAll();
+    const ex=all.find(x=>x.name===$('#list').value);
+    if(ex) loadIntoForm(ex);
+  });
+
+  $('#newEx').onclick = ()=>{
+    $('#exName').value=''; $('#exCategory').value='hybrid'; $('#exWorkSets').value=3;
+    $('#exRepsRange').value='6-8'; $('#exWarmups').value='40,60,80'; $('#exFreqDays').value=3;
+    $('#exInc').value=2.5; $('#exBigInc').value=5;
+  };
+
+  $('#saveEx').onclick = async ()=>{
+    const ex=currentFromForm();
+    if(!ex.name) return alert('Ange namn.');
+    await exPut(ex);
+    await refreshSelect();
+    alert('Sparat ✅');
+  };
+
+  $('#deleteEx').onclick = async ()=>{
+    const name = ($('#exName').value||'').trim();
+    if(!name) return alert('Ingen övning vald.');
+    if(!confirm(`Ta bort "${name}"?`)) return;
+    await exDelete(name);
+    await refreshSelect();
+  };
+  </script>
 </body>
 </html>
