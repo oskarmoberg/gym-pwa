@@ -3,22 +3,59 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <title>Export</title>
+  <title>Export & Backup</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="app.css" />
   <style>
-    body{background:#0b1220;color:#e5e7eb;font-family:ui-sans-serif,system-ui,-apple-system,Inter,Roboto}
+    :root { --bg:#0b1220; --card:#0d1322; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937; }
+    *{box-sizing:border-box;font-family:ui-sans-serif,system-ui,-apple-system,Inter,Roboto}
+    body{margin:0;background:var(--bg);color:var(--text)}
     .wrap{max-width:960px;margin:0 auto;padding:16px}
-    .card{background:#0d1322;border:1px solid #1f2937;border-radius:16px;padding:14px}
-    h1{margin:0 0 10px}
+    .card{background:#0d1322;border:1px solid var(--border);border-radius:16px;padding:14px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .col{flex:1 1 240px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    button,input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #243244;background:#000;color:#e5e7eb;font-weight:700;font-size:16px}
+    .title{font-size:22px;font-weight:800;margin:0 0 10px}
+    .sp{height:10px}
+    .btn{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;cursor:pointer}
+    .btn.ghost{background:transparent;border:1px solid #334155;font-weight:600}
+    .muted{color:#94a3b8;font-size:12px}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Export</h1>
-      <p>Här samlar vi Export JSON/CSV + backup/restore + "rensa cache".</p>
-      <p><em>Kommer i Sprint 2.</em></p>
+      <h1 class="title">Export & Backup</h1>
+      <div class="row">
+        <div class="col"><button id="exportJSON" class="btn">Exportera ALLT (JSON)</button></div>
+        <div class="col"><button id="exportCSV" class="btn ghost">Exportera pass (CSV)</button></div>
+      </div>
+
+      <div class="sp"></div>
+      <div class="row">
+        <div class="col">
+          <label>Återställ från JSON (fil)</label>
+          <input type="file" id="importFile" accept=".json,application/json">
+        </div>
+        <div class="col" style="align-self:end">
+          <button id="importBtn" class="btn">Importera</button>
+        </div>
+      </div>
+
+      <div class="sp"></div>
+      <div class="row">
+        <div class="col"><button id="clearCache" class="btn ghost">Rensa cache (PWA)</button></div>
+        <div class="col"><button id="unregisterSW" class="btn ghost">Avregistrera Service Worker</button></div>
+      </div>
+
+      <div class="sp"></div>
+      <div class="row">
+        <div class="col"><button id="wipeDB" class="btn ghost" style="border-color:#ef4444">TA BORT ALL DATA (DB)</button></div>
+      </div>
+
+      <div class="sp"></div>
+      <div class="muted">Tips: Exportera JSON ibland som backup. Import läser både övningar och pass om de finns i filen.</div>
     </div>
   </div>
 
@@ -29,5 +66,102 @@
     <a href="dashboard.html" data-tab="dashboard">Mer</a>
   </nav>
   <script src="nav.js"></script>
+
+  <script>
+  // ===== DB helpers =====
+  const DB_NAME='gymlogger_db';
+  let db;
+  function idbOpen(){
+    return new Promise((res,rej)=>{
+      const r = indexedDB.open(DB_NAME, 2);
+      r.onupgradeneeded = e=>{
+        const d = e.target.result;
+        d.objectStoreNames.contains('workouts') || d.createObjectStore('workouts',{keyPath:'id',autoIncrement:true});
+        d.objectStoreNames.contains('exercises') || d.createObjectStore('exercises',{keyPath:'name'});
+      };
+      r.onsuccess=()=>{db=r.result;res()}; r.onerror=()=>rej(r.error);
+    });
+  }
+  function allWorkouts(){return new Promise((res,rej)=>{const tx=db.transaction('workouts','readonly');const st=tx.objectStore('workouts');const g=st.getAll();g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});}
+  function allExercises(){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readonly');const st=tx.objectStore('exercises');const g=st.getAll();g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});}
+  function putWorkout(w){return new Promise((res,rej)=>{const tx=db.transaction('workouts','readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore('workouts').put(w);});}
+  function putExercise(e){return new Promise((res,rej)=>{const tx=db.transaction('exercises','readwrite');tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.objectStore('exercises').put(e);});}
+  function wipeStore(name){return new Promise((res,rej)=>{const tx=db.transaction(name,'readwrite');const s=tx.objectStore(name);const r=s.clear();r.onsuccess=()=>res();r.onerror=()=>rej(r.error);});}
+
+  // ===== Utils =====
+  const todayISO=()=>new Date().toISOString().slice(0,10);
+  function download(filename, text, type){
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([text],{type}));
+    a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  (async function init(){ await idbOpen(); })();
+
+  // ===== Export =====
+  document.getElementById('exportJSON').onclick = async ()=>{
+    const [w,e] = await Promise.all([allWorkouts(), allExercises()]);
+    const payload = { version:1, exportedAt:new Date().toISOString(), workouts:w, exercises:e };
+    download(`gym_backup_${todayISO()}.json`, JSON.stringify(payload,null,2), 'application/json');
+  };
+
+  document.getElementById('exportCSV').onclick = async ()=>{
+    const w = await allWorkouts();
+    const rows=[['dateISO','exercise','setIndex','weightKg','reps','est1RM']];
+    w.forEach(x=> x.sets.forEach((s,i)=> rows.push([x.dateISO,x.exercise,i+1,s.weightKg,s.reps,(x.est1RM||0).toFixed(1)])));
+    const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+    download(`workouts_${todayISO()}.csv`, csv, 'text/csv');
+  };
+
+  // ===== Import =====
+  document.getElementById('importBtn').onclick = async ()=>{
+    const f = document.getElementById('importFile').files[0];
+    if(!f) return alert('Välj en JSON-fil först.');
+    const text = await f.text();
+    let data;
+    try{ data = JSON.parse(text); } catch(e){ return alert('Ogiltig JSON.'); }
+
+    // Stöd både "payload med workouts/exercises" och rena listor
+    if(Array.isArray(data)){
+      // gissa typ
+      if(data[0] && 'exercise' in data[0]){ // workouts
+        await wipeStore('workouts');
+        for(const w of data) await putWorkout(w);
+      } else if(data[0] && 'category' in data[0]){ // exercises
+        await wipeStore('exercises');
+        for(const ex of data) await putExercise(ex);
+      } else {
+        return alert('Okänd JSON-struktur.');
+      }
+    } else {
+      if(data.workouts){ await wipeStore('workouts'); for(const w of data.workouts) await putWorkout(w); }
+      if(data.exercises){ await wipeStore('exercises'); for(const ex of data.exercises) await putExercise(ex); }
+    }
+    alert('Import klart ✅');
+  };
+
+  // ===== Cache / SW =====
+  document.getElementById('clearCache').onclick = async ()=>{
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k=>caches.delete(k)));
+    alert('Cache rensad ✅');
+    location.reload();
+  };
+  document.getElementById('unregisterSW').onclick = async ()=>{
+    if('serviceWorker' in navigator){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for(const r of regs) await r.unregister();
+      alert('Service Worker avregistrerad. Ladda om sidan.');
+      location.reload();
+    }
+  };
+
+  // ===== Wipe DB =====
+  document.getElementById('wipeDB').onclick = async ()=>{
+    if(!confirm('TA BORT ALL DATA? Detta går inte att ångra.')) return;
+    await wipeStore('workouts'); await wipeStore('exercises');
+    alert('All data raderad.');
+  };
+  </script>
 </body>
 </html>
