@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <title>Gym Logger — Pass (compact)</title>
+  <title>Gym Logger — Pass (tap-to-log)</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="app.css" />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
       font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       letter-spacing:.2px;
     }
-    .wrap{max-width:820px;margin:0 auto;padding:8px 10px 80px} /* extra botten för tabbar */
+    .wrap{max-width:820px;margin:0 auto;padding:8px 10px 80px}
     .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));
       border:1px solid var(--line); border-radius:12px; padding:10px}
     .title{margin:0 0 6px;font-size:18px;font-weight:800}
@@ -46,16 +46,13 @@
     .warn{color:var(--warn);font-weight:800}
     .ghostcell{opacity:.35}
     .delbtn{width:auto;min-width:auto;padding:4px 8px;border-radius:7px;border:1px solid #334155;background:transparent;color:#e5e7eb;font-size:13px;line-height:1}
+    .clickable{cursor:pointer}
+    .clickable:hover{background:#0e172e}
+    .hint{color:#9CA3AF;font-size:11px;margin-top:4px}
 
-    /* Animation när rad loggas */
+    /* Animation */
     @keyframes pulse{0%{background-color:#16a34a22}100%{background-color:transparent}}
     tr.added{animation:pulse .5s ease-out}
-
-    /* Mobil: minska vertikalt */
-    @media(max-width:430px){
-      .wrap{padding:6px 8px 78px}
-      th,td{padding:7px 8px}
-    }
   </style>
 </head>
 <body>
@@ -63,7 +60,7 @@
   <section class="card" id="leftCard">
     <h1 class="title" id="exerciseTitle">Aktivt pass</h1>
 
-    <!-- Övning + datum (kompakt) -->
+    <!-- Övning + datum -->
     <div class="row">
       <div class="col">
         <label>Övning</label>
@@ -77,7 +74,7 @@
 
     <div class="sp"></div>
 
-    <!-- TABELL: klara överst, förslag under -->
+    <!-- TABELL: klara överst, förslag under (tap-to-log) -->
     <table>
       <thead>
         <tr>
@@ -89,10 +86,11 @@
       </thead>
       <tbody id="sessionBody"></tbody>
     </table>
+    <div class="hint">Tips: tryck på en röd förslagsrad för att logga setet.</div>
 
     <div class="sp"></div>
 
-    <!-- Inputs + Addera (kompakt rad) -->
+    <!-- Inputs + Addera (för avvikelser/AMRAP) -->
     <div class="row">
       <div class="col">
         <label>Vikt (kg)</label>
@@ -114,7 +112,7 @@
   </section>
 </div>
 
-<!-- Bottenmeny (samma) -->
+<!-- Bottenmeny -->
 <nav class="tabbar">
   <a href="index.html" data-tab="pass">Pass</a>
   <a href="exercises.html" data-tab="exercises">Övningar</a>
@@ -143,7 +141,7 @@ function idbAdd(workout){return new Promise((res,rej)=>{const tx=db.transaction(
 async function idbUpsertByDateExercise(dateISO, exercise, sets){
   const all=await idbAll();
   const found=all.find(w=>w.dateISO===dateISO && w.exercise===exercise);
-  const est1RM = sets.length ? Math.max(...sets.map(s=>epley(s.weightKg,s.reps))) : 0;
+  const est1RM = sets.length ? Math.max(...sets.map(s=>epley(totalForSet(s),s.reps))) : 0;
   if(found){
     await new Promise((res,rej)=>{const tx=db.transaction('workouts','readwrite');tx.objectStore('workouts').delete(found.id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
     await idbAdd({ id:found.id, dateISO, exercise, sets, est1RM, notes: found.notes||'' });
@@ -160,6 +158,7 @@ function exPut(ex){return new Promise((res,rej)=>{const tx=db.transaction('exerc
 const $=q=>document.querySelector(q);
 const fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
 const todayISO=()=>new Date().toISOString().slice(0,10);
+// Epley använder total belastning
 const epley=(w,r)=> r>1 ? w*(1+r/30) : w;
 function parseNumber(value){
   if (value == null) return 0;
@@ -172,25 +171,36 @@ function parseNumber(value){
 let currentSets=[];         // {weightKg,reps}
 let currentPlan=[];         // [{weightKg,reps,type,idx}]
 const sessionTargetCache={}; // `${ex}|${date}` → vikt
+let currentParams=null;
+let userBodyweight = 80;    // TODO: gör inställning senare
 
 /* ===== Seed defaults ===== */
 async function seedExercisesIfEmpty(){
   const list = await exAll(); if(list.length) return;
   const defaults = [
-    { name:'Marklyft', category:'base',   workSets:3, repsMin:3, repsMax:5,  warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:5 },
-    { name:'Bänkpress',category:'hybrid', workSets:3, repsMin:6, repsMax:8,  warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3 },
-    { name:'Knäböj',   category:'base',   workSets:3, repsMin:3, repsMax:5,  warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:4 },
-    { name:'Militärpress',category:'hybrid',workSets:3,repsMin:6,repsMax:8,  warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:4 },
-    { name:'Chins',    category:'hybrid', workSets:3, repsMin:6, repsMax:10, warmups:[40,60],    inc:2.5, bigInc:5, freqDays:3 },
-    { name:'Bicepscurl',category:'iso',   workSets:3, repsMin:10,repsMax:15, warmups:[40],       inc:2.5, bigInc:5, freqDays:2 }
+    { name:'Marklyft', category:'base',   workSets:3, repsMin:3, repsMax:5,  warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:5, baseWeightMode:'absolute' },
+    { name:'Bänkpress',category:'hybrid', workSets:3, repsMin:6, repsMax:8,  warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'absolute' },
+    { name:'Knäböj',   category:'base',   workSets:3, repsMin:3, repsMax:5,  warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:4, baseWeightMode:'absolute' },
+    { name:'Militärpress',category:'hybrid',workSets:3,repsMin:6,repsMax:8,  warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:4, baseWeightMode:'absolute' },
+    { name:'Chins',    category:'hybrid', workSets:3, repsMin:6, repsMax:10, warmups:[40,60],    inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'bodyweight' },
+    { name:'Bicepscurl',category:'iso',   workSets:3, repsMin:10,repsMax:15, warmups:[40],       inc:2.5, bigInc:5, freqDays:2, baseWeightMode:'absolute' }
   ];
   for(const ex of defaults) await exPut(ex);
+}
+
+/* ===== Bodyweight handling ===== */
+function baseForParams(params){
+  return params?.baseWeightMode==='bodyweight' ? userBodyweight : 0;
+}
+// total belastning för ett set
+function totalForSet(s){
+  return baseForParams(currentParams) + (parseFloat(s.weightKg)||0);
 }
 
 /* ===== Plan ===== */
 async function getParamsFor(name){
   const all = await exAll(); const ex = all.find(x=>x.name===name);
-  return ex || { name, category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3 };
+  return ex || { name, category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'absolute' };
 }
 function lastWorkingSummary(all, exercise, workSets){
   const sessions=all.filter(w=>w.exercise===exercise).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
@@ -230,6 +240,7 @@ function renderTable(){
   const body = $('#sessionBody'); body.innerHTML='';
   const done = currentSets.length;
 
+  // Klara set
   currentSets.forEach((s,i)=>{
     const tr=document.createElement('tr'); tr.classList.add('added');
     tr.innerHTML = `
@@ -240,11 +251,14 @@ function renderTable(){
     body.appendChild(tr);
   });
 
+  // Förslagsrader (tap-to-log)
   for(let i=done;i<currentPlan.length;i++){
     const p=currentPlan[i];
     const lastWork = p.type==='work' && i===currentPlan.length-1;
     const note = lastWork ? 'Sista' : 'Förslag';
     const tr=document.createElement('tr');
+    tr.classList.add('clickable');
+    tr.dataset.planIndex = i; // för klick-handler
     tr.innerHTML = `
       <td class="warn">${fmt(p.weightKg)}kg</td>
       <td class="warn">${p.reps}</td>
@@ -253,6 +267,7 @@ function renderTable(){
     body.appendChild(tr);
   }
 
+  // Delete
   body.querySelectorAll('button[data-i]').forEach(b=>{
     b.onclick = async ()=>{
       const idx=+b.dataset.i;
@@ -262,10 +277,35 @@ function renderTable(){
       refreshRightSide();
     };
   });
+
+  // Tap-to-log på förslagsrader
+  body.querySelectorAll('tr.clickable').forEach(tr=>{
+    tr.onclick = async ()=>{
+      const idx = Number(tr.dataset.planIndex);
+      const p = currentPlan[idx];
+      let reps = p.reps;
+
+      if (typeof reps === 'string') {
+        // Hantera intervall/AMRAP via prompt
+        let suggested = 0;
+        const m = String(reps).match(/(\d+)\s*-\s*(\d+)/);
+        if (m) suggested = Number(m[2]);
+        const placeholder = m ? `${m[1]}-${m[2]}` : 'AMRAP';
+        const input = prompt(`Ange reps för setet (${placeholder})`, suggested || '');
+        const parsed = parseInt(input, 10);
+        if (!parsed || parsed <= 0) return; // avbrutet/ogiltigt
+        reps = parsed;
+      }
+
+      currentSets.push({weightKg:p.weightKg, reps:Number(reps)});
+      renderTable();
+      await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
+      await refreshRightSide();
+    };
+  });
 }
 
 function renderHistoryMeta(all,ex){
-  // Bara liten “senaste”-rad för att hålla sidan kompakt
   const filt=all.filter(w=>w.exercise===ex).sort((a,b)=>b.dateISO.localeCompare(a.dateISO)).slice(0,1);
   const last=filt[0];
   $('#lastMaxBox').textContent = last
@@ -290,10 +330,10 @@ async function computeOrGetSessionTarget(exName, dateISO, params){
 async function refreshPlanOnly(){
   const exName = $('#exercise').value;
   const dateISO = $('#date').value || todayISO();
-  const params = await getParamsFor(exName);
-  const target = await computeOrGetSessionTarget(exName, dateISO, params);
-  currentPlan = buildPlan(target, params);
-  $('#exerciseTitle').textContent = exName; // enkel header
+  currentParams = await getParamsFor(exName);
+  const target = await computeOrGetSessionTarget(exName, dateISO, currentParams);
+  currentPlan = buildPlan(target, currentParams);
+  $('#exerciseTitle').textContent = exName;
   renderTable();
 }
 
@@ -329,15 +369,18 @@ $('#exercise').addEventListener('change', async ()=>{ await loadTodayFor($('#exe
 $('#date').addEventListener('change', async ()=>{ await loadTodayFor($('#exercise').value); });
 
 $('#add').addEventListener('click', async ()=>{
-  // Tomt = använd nästa förslag
+  // Manuell override – tomt = använd nästa förslag
   let w = parseNumber($('#weight').value);
   let r = parseNumber($('#reps').value);
   if((!w || !r) && currentPlan.length > currentSets.length){
     const next = currentPlan[currentSets.length];
     if(!w) w = next.weightKg;
-    if(!r) r = parseNumber(String(next.reps).replace(/[^\d.,]/g,'')) || (typeof next.reps==='string' ? 5 : next.reps);
+    if(!r) {
+      const m = String(next.reps).match(/(\d+)\s*-\s*(\d+)/);
+      r = m ? Number(m[2]) : (String(next.reps).toLowerCase()==='amrap' ? 5 : Number(next.reps));
+    }
   }
-  if(w<=0 || r<=0) return alert('Ange både vikt och reps (eller lämna tomt för att använda förslaget).');
+  if(w<=0 || r<=0) return alert('Ange både vikt och reps (eller tryck på förslagsraden).');
 
   currentSets.push({weightKg:w, reps:r});
   $('#weight').value=''; $('#reps').value='';
