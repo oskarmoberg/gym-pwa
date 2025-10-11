@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <title>Gym Logger — Pass (tap-to-log)</title>
+  <title>Gym Logger — Pass (tap + timer)</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="app.css" />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
@@ -15,29 +15,22 @@
       --ok:#22C55E; --warn:#EF4444;
     }
     *{box-sizing:border-box}
-    body{
-      margin:0;background:var(--bg);color:var(--text);
-      font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      letter-spacing:.2px;
-    }
-    .wrap{max-width:820px;margin:0 auto;padding:8px 10px 80px}
-    .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));
-      border:1px solid var(--line); border-radius:12px; padding:10px}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing:.2px;}
+    .wrap{max-width:820px;margin:0 auto;padding:8px 10px 88px}
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel-2)); border:1px solid var(--line); border-radius:12px; padding:10px}
     .title{margin:0 0 6px;font-size:18px;font-weight:800}
     .row{display:flex;gap:6px;flex-wrap:wrap}
     .col{flex:1 1 220px}
     label{display:block;color:var(--muted);font-size:11px;margin:0 0 4px}
 
-    /* Inputs – anti-zoom + kompakt */
-    select,input,button{
-      width:100%;padding:8px 10px;border-radius:9px;border:1px solid #243244;
-      background:#000;color:var(--text);font-weight:700;font-size:16px
-    }
+    /* Inputs */
+    select,input,button{width:100%;padding:8px 10px;border-radius:9px;border:1px solid #243244;background:#000;color:var(--text);font-weight:700;font-size:16px}
     .btn{background:linear-gradient(180deg,#23c55e,#16a34a);border:none;cursor:pointer}
     .muted{color:var(--muted);font-size:11px}
     .sp{height:6px}
 
-    /* Tabell kompakt */
+    /* Tabell */
     table{width:100%;border-collapse:collapse;background:#0b1220;border-radius:9px;overflow:hidden;font-size:13px}
     th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
     th{background:#0f172a;font-weight:800;font-size:12px;letter-spacing:.3px}
@@ -48,11 +41,18 @@
     .delbtn{width:auto;min-width:auto;padding:4px 8px;border-radius:7px;border:1px solid #334155;background:transparent;color:#e5e7eb;font-size:13px;line-height:1}
     .clickable{cursor:pointer}
     .clickable:hover{background:#0e172e}
-    .hint{color:#9CA3AF;font-size:11px;margin-top:4px}
 
     /* Animation */
     @keyframes pulse{0%{background-color:#16a34a22}100%{background-color:transparent}}
     tr.added{animation:pulse .5s ease-out}
+
+    /* Timer */
+    .card-mini{border:1px solid var(--line);border-radius:9px;padding:8px;background:#0b1220}
+    .timer-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .timer-display{font-size:22px;font-weight:800;letter-spacing:1px;min-width:96px}
+    .tbtn{padding:6px 10px;border-radius:8px;border:1px solid #334155;background:transparent;color:var(--text);font-weight:700}
+    .tbtn.primary{background:linear-gradient(180deg,#23c55e,#16a34a);border:none}
+    .timer-done{animation:pulse .6s ease-out}
   </style>
 </head>
 <body>
@@ -86,7 +86,24 @@
       </thead>
       <tbody id="sessionBody"></tbody>
     </table>
-    <div class="hint">Tips: tryck på en röd förslagsrad för att logga setet.</div>
+    <div class="muted" style="margin-top:4px">Tips: tryck på en röd förslagsrad för att logga setet.</div>
+
+    <div class="sp"></div>
+
+    <!-- VILOTIMER -->
+    <div class="card-mini">
+      <div class="timer-row">
+        <div class="timer-display" id="restDisplay">03:00</div>
+        <div class="timer-controls">
+          <button class="tbtn" id="restMinus">−30s</button>
+          <button class="tbtn primary" id="restStart">Start</button>
+          <button class="tbtn" id="restPause">Paus</button>
+          <button class="tbtn" id="restReset">Återställ</button>
+          <button class="tbtn" id="restPlus">+30s</button>
+        </div>
+      </div>
+      <div class="muted" id="restLabel">Vila: 3:00 (standard)</div>
+    </div>
 
     <div class="sp"></div>
 
@@ -158,7 +175,6 @@ function exPut(ex){return new Promise((res,rej)=>{const tx=db.transaction('exerc
 const $=q=>document.querySelector(q);
 const fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:1});
 const todayISO=()=>new Date().toISOString().slice(0,10);
-// Epley använder total belastning
 const epley=(w,r)=> r>1 ? w*(1+r/30) : w;
 function parseNumber(value){
   if (value == null) return 0;
@@ -174,33 +190,28 @@ const sessionTargetCache={}; // `${ex}|${date}` → vikt
 let currentParams=null;
 let userBodyweight = 80;    // TODO: gör inställning senare
 
-/* ===== Seed defaults ===== */
+/* ===== Seed defaults (med restSec) ===== */
 async function seedExercisesIfEmpty(){
   const list = await exAll(); if(list.length) return;
   const defaults = [
-    { name:'Marklyft', category:'base',   workSets:3, repsMin:3, repsMax:5,  warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:5, baseWeightMode:'absolute' },
-    { name:'Bänkpress',category:'hybrid', workSets:3, repsMin:6, repsMax:8,  warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'absolute' },
-    { name:'Knäböj',   category:'base',   workSets:3, repsMin:3, repsMax:5,  warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:4, baseWeightMode:'absolute' },
-    { name:'Militärpress',category:'hybrid',workSets:3,repsMin:6,repsMax:8,  warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:4, baseWeightMode:'absolute' },
-    { name:'Chins',    category:'hybrid', workSets:3, repsMin:6, repsMax:10, warmups:[40,60],    inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'bodyweight' },
-    { name:'Bicepscurl',category:'iso',   workSets:3, repsMin:10,repsMax:15, warmups:[40],       inc:2.5, bigInc:5, freqDays:2, baseWeightMode:'absolute' }
+    { name:'Marklyft', category:'base',   workSets:3, repsMin:3, repsMax:5,  warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:5, baseWeightMode:'absolute', restSec:180 },
+    { name:'Bänkpress',category:'hybrid', workSets:3, repsMin:6, repsMax:8,  warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'absolute', restSec:120 },
+    { name:'Knäböj',   category:'base',   workSets:3, repsMin:3, repsMax:5,  warmups:[50,70,85], inc:2.5, bigInc:5, freqDays:4, baseWeightMode:'absolute', restSec:180 },
+    { name:'Militärpress',category:'hybrid',workSets:3,repsMin:6,repsMax:8,  warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:4, baseWeightMode:'absolute', restSec:90  },
+    { name:'Chins',    category:'hybrid', workSets:3, repsMin:6, repsMax:10, warmups:[40,60],    inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'bodyweight', restSec:90  },
+    { name:'Bicepscurl',category:'iso',   workSets:3, repsMin:10,repsMax:15, warmups:[40],       inc:2.5, bigInc:5, freqDays:2, baseWeightMode:'absolute', restSec:60  }
   ];
   for(const ex of defaults) await exPut(ex);
 }
 
-/* ===== Bodyweight handling ===== */
-function baseForParams(params){
-  return params?.baseWeightMode==='bodyweight' ? userBodyweight : 0;
-}
-// total belastning för ett set
-function totalForSet(s){
-  return baseForParams(currentParams) + (parseFloat(s.weightKg)||0);
-}
+/* ===== Bodyweight helpers ===== */
+function baseForParams(params){ return params?.baseWeightMode==='bodyweight' ? userBodyweight : 0; }
+function totalForSet(s){ return baseForParams(currentParams) + (parseFloat(s.weightKg)||0); }
 
 /* ===== Plan ===== */
 async function getParamsFor(name){
   const all = await exAll(); const ex = all.find(x=>x.name===name);
-  return ex || { name, category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'absolute' };
+  return ex || { name, category:'hybrid', workSets:3, repsMin:6, repsMax:8, warmups:[40,60,80], inc:2.5, bigInc:5, freqDays:3, baseWeightMode:'absolute', restSec:120 };
 }
 function lastWorkingSummary(all, exercise, workSets){
   const sessions=all.filter(w=>w.exercise===exercise).sort((a,b)=>b.dateISO.localeCompare(a.dateISO));
@@ -235,6 +246,22 @@ function buildPlan(targetWeight, params){
   return [...warm, ...work];
 }
 
+/* ===== Timer ===== */
+let restTimer=null, restLeft=180, restDefault=180, restRunning=false;
+const D=$('#restDisplay'), L=$('#restLabel');
+function fmtSec(s){ const m=Math.floor(s/60), r=s%60; return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;}
+function timerRender(){ D.textContent = fmtSec(restLeft); L.textContent = `Vila: ${fmtSec(restDefault)} (standard)`; }
+function timerStart(){ if(restRunning) return; restRunning=true; restTimer=setInterval(()=>{ restLeft=Math.max(0,restLeft-1); D.textContent=fmtSec(restLeft); if(restLeft===0){ timerDone(); } },1000); }
+function timerPause(){ restRunning=false; clearInterval(restTimer); restTimer=null; }
+function timerReset(){ timerPause(); restLeft=restDefault; timerRender(); }
+function timerDone(){
+  timerPause();
+  const el = document.getElementById('leftCard'); el.classList.add('timer-done'); setTimeout(()=>el.classList.remove('timer-done'),600);
+  if(navigator.vibrate) navigator.vibrate([200,100,200]);
+  try { const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.type='sine'; o.frequency.value=880; o.connect(g); g.connect(ctx.destination); g.gain.value=0.05; o.start(); setTimeout(()=>{o.stop();ctx.close()},500); } catch(e){}
+}
+function setRestDefaultsFromParams(){ restDefault = Number(currentParams?.restSec)||120; restLeft = restDefault; timerRender(); }
+
 /* ===== Render ===== */
 function renderTable(){
   const body = $('#sessionBody'); body.innerHTML='';
@@ -258,7 +285,7 @@ function renderTable(){
     const note = lastWork ? 'Sista' : 'Förslag';
     const tr=document.createElement('tr');
     tr.classList.add('clickable');
-    tr.dataset.planIndex = i; // för klick-handler
+    tr.dataset.planIndex = i;
     tr.innerHTML = `
       <td class="warn">${fmt(p.weightKg)}kg</td>
       <td class="warn">${p.reps}</td>
@@ -278,7 +305,7 @@ function renderTable(){
     };
   });
 
-  // Tap-to-log på förslagsrader
+  // Tap-to-log
   body.querySelectorAll('tr.clickable').forEach(tr=>{
     tr.onclick = async ()=>{
       const idx = Number(tr.dataset.planIndex);
@@ -286,14 +313,13 @@ function renderTable(){
       let reps = p.reps;
 
       if (typeof reps === 'string') {
-        // Hantera intervall/AMRAP via prompt
         let suggested = 0;
         const m = String(reps).match(/(\d+)\s*-\s*(\d+)/);
         if (m) suggested = Number(m[2]);
         const placeholder = m ? `${m[1]}-${m[2]}` : 'AMRAP';
         const input = prompt(`Ange reps för setet (${placeholder})`, suggested || '');
         const parsed = parseInt(input, 10);
-        if (!parsed || parsed <= 0) return; // avbrutet/ogiltigt
+        if (!parsed || parsed <= 0) return;
         reps = parsed;
       }
 
@@ -301,6 +327,9 @@ function renderTable(){
       renderTable();
       await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
       await refreshRightSide();
+
+      // AUTO-START TIMER för work-set
+      if (p.type === 'work') { timerReset(); timerStart(); }
     };
   });
 }
@@ -334,6 +363,7 @@ async function refreshPlanOnly(){
   const target = await computeOrGetSessionTarget(exName, dateISO, currentParams);
   currentPlan = buildPlan(target, currentParams);
   $('#exerciseTitle').textContent = exName;
+  setRestDefaultsFromParams(); // uppdatera vilotid för övningen
   renderTable();
 }
 
@@ -363,6 +393,13 @@ async function loadTodayFor(exName){
   await refreshExerciseDropdown();
   if(!$('#exercise').value) $('#exercise').value='Marklyft';
   await loadTodayFor($('#exercise').value);
+
+  // Timer knappar
+  $('#restStart').onclick = ()=>timerStart();
+  $('#restPause').onclick = ()=>timerPause();
+  $('#restReset').onclick = ()=>timerReset();
+  $('#restMinus').onclick = ()=>{ restLeft=Math.max(0,restLeft-30); D.textContent=fmtSec(restLeft); };
+  $('#restPlus').onclick = ()=>{ restLeft=restLeft+30; D.textContent=fmtSec(restLeft); };
 })();
 
 $('#exercise').addEventListener('change', async ()=>{ await loadTodayFor($('#exercise').value); });
@@ -387,6 +424,10 @@ $('#add').addEventListener('click', async ()=>{
   renderTable();
   await idbUpsertByDateExercise($('#date').value||todayISO(), $('#exercise').value, currentSets);
   await refreshRightSide();
+
+  // Auto-start timer om manuellt set är ett work-set (heuristik: matchar planposition)
+  const nextPlan = currentPlan[currentSets.length-1];
+  if(nextPlan && nextPlan.type==='work'){ timerReset(); timerStart(); }
 });
 
 /* ===== Service worker ===== */
